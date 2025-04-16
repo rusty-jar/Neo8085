@@ -38,7 +38,14 @@ class Assembler8085:
             "MVI", "MOV", "LXI", "LDA", "STA", "ADD", "ADI", "SUB", "INR", "DCR",
             "JMP", "JZ", "JNZ", "JC", "JNC", "JP", "JM", "JPE", "JPO", "HLT", "INX",
             "PUSH", "POP", "CALL", "RET", "CPI", "DAD", "XCHG", "DS", "ORG", "END",
-            "EQU"        ]
+            "EQU", "LDAX", "STAX", "LHLD", "SHLD", "PCHL", "SPHL", "XTHL",
+            "ANA", "ANI", "ORA", "ORI", "XRA", "XRI", "CMA", 
+            "CMC", "STC", "RLC", "RRC", "RAL", "RAR",
+            "ADC", "ACI", "SBB", "SBI", "DAA", "DCX",
+            "CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO",
+            "RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO",
+            "RST", "CMP", "NOP"
+        ]
         self.valid_registers = ["A", "B", "C", "D", "E", "H", "L", "M"]
         self.valid_register_pairs = ["B", "D", "H", "SP"]
     
@@ -394,7 +401,35 @@ class Assembler8085:
                  instruction == "INX" or instruction == "DAD" or instruction == "XCHG" or \
                  instruction == "PUSH" or instruction == "POP" or instruction == "RET":  # 1 byte
                 address += 1
-    
+            elif instruction == "LDAX" or instruction == "STAX" or instruction == "PCHL" or instruction == "SPHL" or instruction == "XTHL":  # 1 byte
+                address += 1
+            elif instruction == "LHLD" or instruction == "SHLD":  # 3 bytes (opcode + address)
+                address += 3
+            elif instruction in ["ANA", "ORA", "XRA"]:  # 1 byte (with register operand)
+                address += 1
+            elif instruction in ["ANI", "ORI", "XRI"]:  # 2 bytes (with immediate operand)
+                address += 2
+            elif instruction in ["CMA", "CMC", "STC", "RLC", "RRC", "RAL", "RAR"]:  # 1 byte (no operands)
+                address += 1
+            elif instruction in ["ADC", "SBB"]:  # 1 byte (with register operand)
+                address += 1
+            elif instruction in ["ACI", "SBI"]:  # 2 bytes (with immediate operand)
+                address += 2
+            elif instruction in ["DAA"]:  # 1 byte (no operands)
+                address += 1
+            elif instruction == "DCX":  # 1 byte (with register pair operand)
+                address += 1
+            elif instruction in ["CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO"]:  # 3 bytes (conditional calls)
+                address += 3
+            elif instruction in ["RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO"]:  # 1 byte (conditional returns)
+                address += 1
+            elif instruction == "RST":  # 1 byte (restart)
+                address += 1
+            elif instruction == "CMP":  # 1 byte
+                address += 1
+            elif instruction == "NOP":  # 1 byte (no operands)
+                address += 1
+
     def _resolve_symbol_or_number(self, value_str, output):
         """
         Resolves a value that might be a symbol, label, or numeric literal.
@@ -766,6 +801,290 @@ class Assembler8085:
                 
             elif opcode == "XCHG":  # XCHG (1 byte: opcode=0xEB)
                 output.memory[address] = 0xEB
+                address += 1
+
+            elif opcode == "LDAX":  # LDAX rp (1 byte)
+                # LDAX opcodes: B=0x0A, D=0x1A
+                rp = tokens[1].strip(",;")
+                
+                if rp == "B":
+                    output.memory[address] = 0x0A
+                elif rp == "D":
+                    output.memory[address] = 0x1A
+                else:
+                    raise SyntaxError(f"Line {line_num}: LDAX only supports B or D register pairs")
+                
+                address += 1
+
+            elif opcode == "STAX":  # STAX rp (1 byte)
+                # STAX opcodes: B=0x02, D=0x12
+                rp = tokens[1].strip(",;")
+                
+                if rp == "B":
+                    output.memory[address] = 0x02
+                elif rp == "D":
+                    output.memory[address] = 0x12
+                else:
+                    raise SyntaxError(f"Line {line_num}: STAX only supports B or D register pairs")
+                
+                address += 1
+
+            elif opcode == "LHLD":  # LHLD addr (3 bytes: opcode=0x2A, low byte, high byte)
+                value_str = tokens[1].strip(",;")
+                
+                try:
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
+                    output.memory[address] = 0x2A
+                    output.memory[address + 1] = value & 0xFF  # Low byte
+                    output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                output.program_memory_range.add(address + 1)
+                output.program_memory_range.add(address + 2)
+                address += 3
+
+            elif opcode == "SHLD":  # SHLD addr (3 bytes: opcode=0x22, low byte, high byte)
+                value_str = tokens[1].strip(",;")
+                
+                try:
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
+                    output.memory[address] = 0x22
+                    output.memory[address + 1] = value & 0xFF  # Low byte
+                    output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                output.program_memory_range.add(address + 1)
+                output.program_memory_range.add(address + 2)
+                address += 3
+
+            elif opcode == "PCHL":  # PCHL (1 byte: opcode=0xE9)
+                output.memory[address] = 0xE9
+                address += 1
+
+            elif opcode == "SPHL":  # SPHL (1 byte: opcode=0xF9)
+                output.memory[address] = 0xF9
+                address += 1
+
+            elif opcode == "XTHL":  # XTHL (1 byte: opcode=0xE3)
+                output.memory[address] = 0xE3
+                address += 1
+
+            elif opcode == "ANA":  # ANA r/M (1 byte): AND register/memory with A
+                reg = tokens[1].strip(",;")
+                if reg not in self.valid_registers:
+                    raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
+                
+                reg_code = self._get_reg_code(reg)
+                output.memory[address] = 0xA0 | reg_code
+                address += 1
+
+            elif opcode == "ANI":  # ANI data (2 bytes): AND immediate with A
+                value_str = tokens[1].strip(",;")
+                try:
+                    value = self._parse_number(value_str) & 0xFF
+                    output.memory[address] = 0xE6      # Opcode
+                    output.memory[address + 1] = value  # Immediate data
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                output.program_memory_range.add(address + 1)
+                address += 2
+
+            elif opcode == "ORA":  # ORA r/M (1 byte): OR register/memory with A
+                reg = tokens[1].strip(",;")
+                if reg not in self.valid_registers:
+                    raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
+                
+                reg_code = self._get_reg_code(reg)
+                output.memory[address] = 0xB0 | reg_code
+                address += 1
+
+            elif opcode == "ORI":  # ORI data (2 bytes): OR immediate with A
+                value_str = tokens[1].strip(",;")
+                try:
+                    value = self._parse_number(value_str) & 0xFF
+                    output.memory[address] = 0xF6      # Opcode
+                    output.memory[address + 1] = value  # Immediate data
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                output.program_memory_range.add(address + 1)
+                address += 2
+
+            elif opcode == "XRA":  # XRA r/M (1 byte): XOR register/memory with A
+                reg = tokens[1].strip(",;")
+                if reg not in self.valid_registers:
+                    raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
+                
+                reg_code = self._get_reg_code(reg)
+                output.memory[address] = 0xA8 | reg_code
+                address += 1
+
+            elif opcode == "XRI":  # XRI data (2 bytes): XOR immediate with A
+                value_str = tokens[1].strip(",;")
+                try:
+                    value = self._parse_number(value_str) & 0xFF
+                    output.memory[address] = 0xEE      # Opcode
+                    output.memory[address + 1] = value  # Immediate data
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                output.program_memory_range.add(address + 1)
+                address += 2
+
+            elif opcode == "CMA":  # CMA (1 byte): Complement accumulator
+                output.memory[address] = 0x2F
+                address += 1
+
+            elif opcode == "CMC":  # CMC (1 byte): Complement carry flag
+                output.memory[address] = 0x3F
+                address += 1
+
+            elif opcode == "STC":  # STC (1 byte): Set carry flag
+                output.memory[address] = 0x37
+                address += 1
+
+            elif opcode == "RLC":  # RLC (1 byte): Rotate accumulator left
+                output.memory[address] = 0x07
+                address += 1
+
+            elif opcode == "RRC":  # RRC (1 byte): Rotate accumulator right
+                output.memory[address] = 0x0F
+                address += 1
+
+            elif opcode == "RAL":  # RAL (1 byte): Rotate accumulator left through carry
+                output.memory[address] = 0x17
+                address += 1
+
+            elif opcode == "RAR":  # RAR (1 byte): Rotate accumulator right through carry
+                output.memory[address] = 0x1F
+                address += 1
+
+            elif opcode == "ADC":  # ADC r/M (1 byte): Add with carry
+                reg = tokens[1].strip(",;")
+                if reg not in self.valid_registers:
+                    raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
+                
+                reg_code = self._get_reg_code(reg)
+                output.memory[address] = 0x88 | reg_code
+                address += 1
+
+            elif opcode == "ACI":  # ACI data (2 bytes): Add immediate with carry
+                value_str = tokens[1].strip(",;")
+                try:
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFF
+                    output.memory[address] = 0xCE      # Opcode
+                    output.memory[address + 1] = value  # Immediate data
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                output.program_memory_range.add(address + 1)
+                address += 2
+
+            elif opcode == "SBB":  # SBB r/M (1 byte): Subtract with borrow
+                reg = tokens[1].strip(",;")
+                if reg not in self.valid_registers:
+                    raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
+                
+                reg_code = self._get_reg_code(reg)
+                output.memory[address] = 0x98 | reg_code
+                address += 1
+
+            elif opcode == "SBI":  # SBI data (2 bytes): Subtract immediate with borrow
+                value_str = tokens[1].strip(",;")
+                try:
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFF
+                    output.memory[address] = 0xDE      # Opcode
+                    output.memory[address + 1] = value  # Immediate data
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                output.program_memory_range.add(address + 1)
+                address += 2
+
+            elif opcode == "DAA":  # DAA (1 byte): Decimal adjust accumulator
+                output.memory[address] = 0x27
+                address += 1
+
+            elif opcode == "DCX":  # DCX rp (1 byte): Decrement register pair
+                reg_pair = tokens[1].strip(",;")
+                
+                try:
+                    rp_code = self._get_rp_code(reg_pair)
+                    output.memory[address] = 0x0B + (rp_code * 16)
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                address += 1
+
+            elif opcode in ["CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO"]:
+                # Conditional call opcodes mapping
+                call_opcodes = {
+                    "CC": 0xDC,   # Call if carry
+                    "CNC": 0xD4,  # Call if no carry
+                    "CZ": 0xCC,   # Call if zero
+                    "CNZ": 0xC4,  # Call if not zero
+                    "CP": 0xF4,   # Call if positive (S=0)
+                    "CM": 0xFC,   # Call if minus (S=1)
+                    "CPE": 0xEC,  # Call if parity even
+                    "CPO": 0xE4   # Call if parity odd
+                }
+                
+                value_str = tokens[1].strip(",;")
+                
+                try:
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
+                    output.memory[address] = call_opcodes[opcode]
+                    output.memory[address + 1] = value & 0xFF  # Low byte
+                    output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                
+                output.program_memory_range.add(address + 1)
+                output.program_memory_range.add(address + 2)
+                address += 3
+
+            elif opcode in ["RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO"]:
+                # Conditional return opcodes mapping
+                ret_opcodes = {
+                    "RC": 0xD8,   # Return if carry
+                    "RNC": 0xD0,  # Return if no carry
+                    "RZ": 0xC8,   # Return if zero
+                    "RNZ": 0xC0,  # Return if not zero
+                    "RP": 0xF0,   # Return if positive (S=0)
+                    "RM": 0xF8,   # Return if minus (S=1)
+                    "RPE": 0xE8,  # Return if parity even
+                    "RPO": 0xE0   # Return if parity odd
+                }
+                
+                output.memory[address] = ret_opcodes[opcode]
+                address += 1
+
+            elif opcode == "RST":
+                # RST n opcodes: 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF for RST 0-7
+                # The number is 0-7 corresponding to 8 different restart addresses
+                rst_num = self._parse_number(tokens[1].strip(",;"))
+                
+                if rst_num < 0 or rst_num > 7:
+                    raise SyntaxError(f"Line {line_num}: RST requires a number from 0-7")
+                
+                # Calculate opcode: RST n = 11NNN111 where NNN is the 3-bit value of n
+                output.memory[address] = 0xC7 | (rst_num << 3)
+                address += 1
+
+            elif opcode == "CMP":  # CMP r/M (1 byte): Compare register/memory with A
+                reg = tokens[1].strip(",;")
+                if reg not in self.valid_registers:
+                    raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
+                
+                reg_code = self._get_reg_code(reg)
+                output.memory[address] = 0xB8 | reg_code
+                address += 1
+
+            elif opcode == "NOP":  # NOP (1 byte: opcode=0x00)
+                output.memory[address] = 0x00
                 address += 1
         
         # Update program metadata after assembly

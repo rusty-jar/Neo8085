@@ -553,6 +553,589 @@ class Processor8085:
                 self.registers["L"] = temp_e
                 
                 self.registers["PC"] += 1
+
+            elif opcode == "LDAX":  # LDAX B/D (1 byte): Load A from address in BC/DE
+                reg_pair = instruction[1].strip(",;")
+                
+                if reg_pair == "B":
+                    # Load A from memory at BC address
+                    bc_addr = self.get_bc_addr()
+                    self.registers["A"] = self.memory[bc_addr]
+                elif reg_pair == "D":
+                    # Load A from memory at DE address
+                    de_addr = self.get_de_addr()
+                    self.registers["A"] = self.memory[de_addr]
+                else:
+                    self.error = f"Invalid register pair for LDAX: {reg_pair}"
+                    return "ERROR"
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "STAX":  # STAX B/D (1 byte): Store A to address in BC/DE
+                reg_pair = instruction[1].strip(",;")
+                
+                if reg_pair == "B":
+                    # Store A to memory at BC address
+                    bc_addr = self.get_bc_addr()
+                    self.memory[bc_addr] = self.registers["A"]
+                elif reg_pair == "D":
+                    # Store A to memory at DE address
+                    de_addr = self.get_de_addr()
+                    self.memory[de_addr] = self.registers["A"]
+                else:
+                    self.error = f"Invalid register pair for STAX: {reg_pair}"
+                    return "ERROR"
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "LHLD":  # LHLD addr (3 bytes): Load H-L direct
+                addr = self._parse_number(instruction[1])
+                
+                # Load L from memory[addr]
+                self.registers["L"] = self.memory[addr]
+                
+                # Load H from memory[addr+1]
+                self.registers["H"] = self.memory[addr + 1]
+                
+                self.registers["PC"] += 3
+
+            elif opcode == "SHLD":  # SHLD addr (3 bytes): Store H-L direct
+                addr = self._parse_number(instruction[1])
+                
+                # Store L to memory[addr]
+                self.memory[addr] = self.registers["L"]
+                
+                # Store H to memory[addr+1]
+                self.memory[addr + 1] = self.registers["H"]
+                
+                self.registers["PC"] += 3
+
+            elif opcode == "PCHL":  # PCHL (1 byte): Load PC from H-L
+                # Move HL value to PC
+                hl_addr = self.get_hl_addr()
+                self.registers["PC"] = hl_addr
+                
+                # Note: No need to increment PC as it's been directly set
+
+            elif opcode == "SPHL":  # SPHL (1 byte): Load SP from H-L
+                # Move HL value to SP
+                hl_addr = self.get_hl_addr()
+                self.registers["SP"] = hl_addr
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "XTHL":  # XTHL (1 byte): Exchange top of stack with H-L
+                # Get current HL value
+                h_val = self.registers["H"]
+                l_val = self.registers["L"]
+                
+                # Get address of stack top
+                sp_addr = self.registers["SP"]
+                
+                # Exchange L with memory[SP]
+                temp_l = self.memory[sp_addr]
+                self.memory[sp_addr] = l_val
+                self.registers["L"] = temp_l
+                
+                # Exchange H with memory[SP+1]
+                temp_h = self.memory[sp_addr + 1]
+                self.memory[sp_addr + 1] = h_val
+                self.registers["H"] = temp_h
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "ANA":  # ANA r/M (1 byte): AND register/memory with A
+                reg = instruction[1].strip(",;")
+                
+                if reg == "M":
+                    # Memory addressed by HL
+                    value = self.memory[self.get_hl_addr()]
+                else:
+                    # Register
+                    value = self.registers[reg]
+                
+                # Perform AND operation
+                result = self.registers["A"] & value
+                self.registers["A"] = result
+                
+                # Update flags: S, Z, P, CY=0, AC=1 (according to 8085 manual)
+                self.update_flags(result)
+                self.flags["C"] = 0
+                self.flags["AC"] = 1  # AC is set per 8085 specification
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "ANI":  # ANI data (2 bytes): AND immediate with A
+                value = self._parse_number(instruction[1])
+                
+                # Perform AND operation
+                result = self.registers["A"] & value
+                self.registers["A"] = result
+                
+                # Update flags: S, Z, P, CY=0, AC=1
+                self.update_flags(result)
+                self.flags["C"] = 0
+                self.flags["AC"] = 1
+                
+                self.registers["PC"] += 2
+
+            elif opcode == "ORA":  # ORA r/M (1 byte): OR register/memory with A
+                reg = instruction[1].strip(",;")
+                
+                if reg == "M":
+                    # Memory addressed by HL
+                    value = self.memory[self.get_hl_addr()]
+                else:
+                    # Register
+                    value = self.registers[reg]
+                
+                # Perform OR operation
+                result = self.registers["A"] | value
+                self.registers["A"] = result
+                
+                # Update flags: S, Z, P, CY=0, AC=0
+                self.update_flags(result)
+                self.flags["C"] = 0
+                self.flags["AC"] = 0
+                # Invert parity flag for OR operation to match 8085 behavior
+                self.flags["P"] = 1 if self.flags["P"] == 0 else 0
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "ORI":  # ORI data (2 bytes): OR immediate with A
+                value = self._parse_number(instruction[1])
+                
+                # Perform OR operation
+                result = self.registers["A"] | value
+                self.registers["A"] = result
+                
+                # Update flags: S, Z, P, CY=0, AC=0
+                self.update_flags(result)
+                self.flags["C"] = 0
+                self.flags["AC"] = 0
+                # Invert parity flag for OR operation to match 8085 behavior
+                self.flags["P"] = 1 if self.flags["P"] == 0 else 0
+                
+                self.registers["PC"] += 2
+
+            elif opcode == "XRA":  # XRA r/M (1 byte): XOR register/memory with A
+                reg = instruction[1].strip(",;")
+                
+                if reg == "M":
+                    # Memory addressed by HL
+                    value = self.memory[self.get_hl_addr()]
+                else:
+                    # Register
+                    value = self.registers[reg]
+                
+                # Perform XOR operation
+                result = self.registers["A"] ^ value
+                self.registers["A"] = result
+                
+                # Update flags: S, Z, P, CY=0, AC=0
+                self.update_flags(result)
+                self.flags["C"] = 0
+                self.flags["AC"] = 0
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "XRI":  # XRI data (2 bytes): XOR immediate with A
+                value = self._parse_number(instruction[1])
+                
+                # Perform XOR operation
+                result = self.registers["A"] ^ value
+                self.registers["A"] = result
+                
+                # Update flags: S, Z, P, CY=0, AC=0
+                self.update_flags(result)
+                self.flags["C"] = 0
+                self.flags["AC"] = 0
+                
+                self.registers["PC"] += 2
+
+            elif opcode == "CMA":  # CMA (1 byte): Complement accumulator
+                # One's complement (bitwise NOT)
+                self.registers["A"] = (~self.registers["A"]) & 0xFF
+                
+                # No flags affected
+                self.registers["PC"] += 1
+
+            elif opcode == "CMC":  # CMC (1 byte): Complement carry flag
+                # Flip carry flag
+                self.flags["C"] = 1 if self.flags["C"] == 0 else 0
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "STC":  # STC (1 byte): Set carry flag
+                # Set carry flag to 1
+                self.flags["C"] = 1
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "RLC":  # RLC (1 byte): Rotate accumulator left
+                value = self.registers["A"]
+                
+                # Bit 7 goes to carry flag
+                self.flags["C"] = (value >> 7) & 1
+                
+                # Rotate left, bit 7 wraps to bit 0
+                self.registers["A"] = ((value << 1) | (value >> 7)) & 0xFF
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "RRC":  # RRC (1 byte): Rotate accumulator right
+                value = self.registers["A"]
+                
+                # Bit 0 goes to carry flag
+                self.flags["C"] = value & 1
+                
+                # Rotate right, bit 0 wraps to bit 7
+                self.registers["A"] = ((value >> 1) | ((value & 1) << 7)) & 0xFF
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "RAL":  # RAL (1 byte): Rotate accumulator left through carry
+                value = self.registers["A"]
+                old_carry = self.flags["C"]
+                
+                # Bit 7 goes to carry flag
+                self.flags["C"] = (value >> 7) & 1
+                
+                # Rotate left, old carry goes to bit 0
+                self.registers["A"] = ((value << 1) | old_carry) & 0xFF
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "RAR":  # RAR (1 byte): Rotate accumulator right through carry
+                value = self.registers["A"]
+                old_carry = self.flags["C"]
+                
+                # Bit 0 goes to carry flag
+                self.flags["C"] = value & 1
+                
+                # Rotate right, old carry goes to bit 7
+                self.registers["A"] = ((value >> 1) | (old_carry << 7)) & 0xFF
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "ADC":  # ADC r/M (1 byte): Add register/memory with carry
+                reg = instruction[1].strip(",;")
+                
+                if reg == "M":
+                    # Memory addressed by HL
+                    value = self.memory[self.get_hl_addr()]
+                else:
+                    # Register
+                    value = self.registers[reg]
+                
+                # Get current values
+                a_value = self.registers["A"]
+                carry = self.flags["C"]
+                
+                # Calculate auxiliary carry (from bit 3 to bit 4)
+                ac = 1 if ((a_value & 0x0F) + (value & 0x0F) + carry) > 0x0F else 0
+                
+                # Perform addition with carry
+                result = a_value + value + carry
+                
+                # Set the carry flag
+                carry_out = 1 if result > 0xFF else 0
+                
+                # Update A and flags
+                self.registers["A"] = result & 0xFF
+                self.update_flags(self.registers["A"], True, carry_out, True, ac)
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "ACI":  # ACI data (2 bytes): Add immediate with carry
+                value = self._parse_number(instruction[1]) & 0xFF
+                
+                # Get current values
+                a_value = self.registers["A"]
+                carry = self.flags["C"]
+                
+                # Calculate auxiliary carry
+                ac = 1 if ((a_value & 0x0F) + (value & 0x0F) + carry) > 0x0F else 0
+                
+                # Perform addition with carry
+                result = a_value + value + carry
+                
+                # Set the carry flag
+                carry_out = 1 if result > 0xFF else 0
+                
+                # Update A and flags
+                self.registers["A"] = result & 0xFF
+                self.update_flags(self.registers["A"], True, carry_out, True, ac)
+                
+                self.registers["PC"] += 2
+
+            elif opcode == "SBB":  # SBB r/M (1 byte): Subtract register/memory with borrow
+                reg = instruction[1].strip(",;")
+                
+                if reg == "M":
+                    # Memory addressed by HL
+                    value = self.memory[self.get_hl_addr()]
+                else:
+                    # Register
+                    value = self.registers[reg]
+                
+                # Get current values
+                a_value = self.registers["A"]
+                borrow = self.flags["C"]  # In 8085, carry flag acts as borrow flag for subtraction
+                
+                # Calculate auxiliary carry (borrow from bit 4 to bit 3)
+                ac = 1 if (a_value & 0x0F) < ((value & 0x0F) + borrow) else 0
+                
+                # Perform subtraction with borrow
+                result = a_value - value - borrow
+                
+                # Set the carry flag (borrow flag)
+                carry_out = 1 if result < 0 else 0
+                
+                # Update A and flags
+                self.registers["A"] = result & 0xFF
+                self.update_flags(self.registers["A"], True, carry_out, True, ac)
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "SBI":  # SBI data (2 bytes): Subtract immediate with borrow
+                value = self._parse_number(instruction[1]) & 0xFF
+                
+                # Get current values
+                a_value = self.registers["A"]
+                borrow = self.flags["C"]  # In 8085, carry flag acts as borrow flag for subtraction
+                
+                # Calculate auxiliary carry (borrow from bit 4 to bit 3)
+                ac = 1 if (a_value & 0x0F) < ((value & 0x0F) + borrow) else 0
+                
+                # Perform subtraction with borrow
+                result = a_value - value - borrow
+                
+                # Set the carry flag (borrow flag)
+                carry_out = 1 if result < 0 else 0
+                
+                # Update A and flags
+                self.registers["A"] = result & 0xFF
+                self.update_flags(self.registers["A"], True, carry_out, True, ac)
+                
+                self.registers["PC"] += 2
+
+            elif opcode == "DAA":  # DAA (1 byte): Decimal adjust accumulator
+                a_value = self.registers["A"]
+                
+                # Start with current flags
+                carry = self.flags["C"]
+                ac = self.flags["AC"]
+                
+                # Step 1: Adjust the lower nibble
+                if (a_value & 0x0F) > 9 or ac == 1:
+                    # Need to add 6 to lower nibble
+                    old_lower = a_value & 0x0F
+                    a_value += 6
+                    
+                    # Check if adjustment caused a carry from bit 3 to bit 4
+                    if old_lower > (a_value & 0x0F):
+                        ac = 1
+                    else:
+                        ac = 0
+                else:
+                    ac = 0
+                
+                # Step 2: Adjust the upper nibble
+                if ((a_value & 0xF0) >> 4) > 9 or carry == 1 or ((a_value & 0xF0) >= 0x90 and (a_value & 0x0F) > 9):
+                    # Need to add 6 to upper nibble (60H)
+                    a_value += 0x60
+                    carry = 1
+                else:
+                    carry = 0
+                
+                # Update accumulator and flags
+                self.registers["A"] = a_value & 0xFF
+                self.update_flags(self.registers["A"], True, carry, True, ac)
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "DCX":  # DCX rp (1 byte): Decrement register pair
+                reg_pair = instruction[1]
+                
+                if reg_pair == "B":
+                    bc = self.get_bc_addr()
+                    bc = (bc - 1) & 0xFFFF
+                    self.registers["B"] = (bc >> 8) & 0xFF
+                    self.registers["C"] = bc & 0xFF
+                elif reg_pair == "D":
+                    de = self.get_de_addr()
+                    de = (de - 1) & 0xFFFF
+                    self.registers["D"] = (de >> 8) & 0xFF
+                    self.registers["E"] = de & 0xFF
+                elif reg_pair == "H":
+                    hl = self.get_hl_addr()
+                    hl = (hl - 1) & 0xFFFF
+                    self.registers["H"] = (hl >> 8) & 0xFF
+                    self.registers["L"] = hl & 0xFF
+                elif reg_pair == "SP":
+                    self.registers["SP"] = (self.registers["SP"] - 1) & 0xFFFF
+                else:
+                    self.error = f"Invalid register pair: {reg_pair}"
+                    return "ERROR"
+                
+                self.registers["PC"] += 1
+
+            elif opcode in ["CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO"]:
+                # Get target address
+                jump_target = instruction[1].strip(',;')
+                
+                # Resolve target address
+                if jump_target in self.labels:
+                    target_addr = self.labels[jump_target]
+                else:
+                    try:
+                        target_addr = self._parse_number(jump_target)
+                    except ValueError:
+                        # Important fix: if the label isn't found, it could be a forward reference
+                        # We should report the error instead of silently failing
+                        self.error = f"Cannot resolve label: {jump_target}"
+                        return "ERROR"
+                
+                # Check condition based on opcode
+                should_call = False
+                
+                if opcode == "CC" and self.flags["C"] == 1:
+                    should_call = True
+                elif opcode == "CNC" and self.flags["C"] == 0:
+                    should_call = True
+                elif opcode == "CZ" and self.flags["Z"] == 1:
+                    should_call = True
+                elif opcode == "CNZ" and self.flags["Z"] == 0:
+                    should_call = True
+                elif opcode == "CP" and self.flags["S"] == 0:
+                    should_call = True
+                elif opcode == "CM" and self.flags["S"] == 1:
+                    should_call = True
+                elif opcode == "CPE" and self.flags["P"] == 1:
+                    should_call = True
+                elif opcode == "CPO" and self.flags["P"] == 0:
+                    should_call = True
+                
+                if should_call:
+                    # Compute return address (next instruction after CALL)
+                    return_addr = self.registers["PC"] + 3
+                    
+                    # Calculate addresses for pushing return address
+                    addr_high = (self.registers["SP"] - 1) & 0xFFFF
+                    addr_low = (self.registers["SP"] - 2) & 0xFFFF
+                    
+                    # Push return address to stack (high byte first, then low byte)
+                    self.memory[addr_high] = (return_addr >> 8) & 0xFF
+                    self.memory[addr_low] = return_addr & 0xFF
+                    
+                    # Update SP
+                    self.registers["SP"] = addr_low
+                    
+                    # Jump to target address
+                    self.registers["PC"] = target_addr & 0xFFFF
+                else:
+                    # Skip the instruction if condition is not met
+                    self.registers["PC"] += 3
+
+            elif opcode in ["RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO"]:
+                # Check condition based on opcode
+                should_return = False
+                
+                if opcode == "RC" and self.flags["C"] == 1:
+                    should_return = True
+                elif opcode == "RNC" and self.flags["C"] == 0:
+                    should_return = True
+                elif opcode == "RZ" and self.flags["Z"] == 1:
+                    should_return = True
+                elif opcode == "RNZ" and self.flags["Z"] == 0:
+                    should_return = True
+                elif opcode == "RP" and self.flags["S"] == 0:
+                    should_return = True
+                elif opcode == "RM" and self.flags["S"] == 1:
+                    should_return = True
+                elif opcode == "RPE" and self.flags["P"] == 1:
+                    should_return = True
+                elif opcode == "RPO" and self.flags["P"] == 0:
+                    should_return = True
+                
+                if should_return:
+                    # Pop return address from stack
+                    # Get low byte from SP
+                    return_addr_low = self.memory[self.registers["SP"]]
+                    self.registers["SP"] = (self.registers["SP"] + 1) & 0xFFFF
+                    
+                    # Get high byte from SP+1
+                    return_addr_high = self.memory[self.registers["SP"]]
+                    self.registers["SP"] = (self.registers["SP"] + 1) & 0xFFFF
+                    
+                    # Combine to form 16-bit address
+                    return_addr = (return_addr_high << 8) | return_addr_low
+                    
+                    # Jump to return address
+                    self.registers["PC"] = return_addr & 0xFFFF
+                else:
+                    # Skip the instruction if condition is not met
+                    self.registers["PC"] += 1
+
+            elif opcode == "RST":
+                # RST n - Call to address 0000h + 8*n
+                rst_num = int(instruction[1])
+                
+                if rst_num < 0 or rst_num > 7:
+                    self.error = f"Invalid RST number: {rst_num}. Must be 0-7."
+                    return "ERROR"
+                
+                # Calculate restart address
+                restart_addr = 8 * rst_num
+                
+                # Compute return address (next instruction after RST)
+                return_addr = self.registers["PC"] + 1
+                
+                # Calculate addresses for pushing return address
+                addr_high = (self.registers["SP"] - 1) & 0xFFFF
+                addr_low = (self.registers["SP"] - 2) & 0xFFFF
+                
+                # Push return address to stack (high byte first, then low byte)
+                self.memory[addr_high] = (return_addr >> 8) & 0xFF
+                self.memory[addr_low] = return_addr & 0xFF
+                
+                # Update SP
+                self.registers["SP"] = addr_low
+                
+                # Jump to restart address
+                self.registers["PC"] = restart_addr
+
+            elif opcode == "CMP":  # CMP r/M (1 byte): Compare register/memory with A
+                reg = instruction[1].strip(",;")
+                
+                if reg == "M":
+                    # Memory addressed by HL
+                    value = self.memory[self.get_hl_addr()]
+                else:
+                    # Register
+                    value = self.registers[reg]
+                
+                # Get accumulator value
+                a_value = self.registers["A"]
+                
+                # Calculate auxiliary carry for subtraction (borrow from bit 4 to bit 3)
+                ac = 1 if (a_value & 0x0F) < (value & 0x0F) else 0
+                
+                # Perform subtraction (don't store result)
+                result = a_value - value
+                
+                # Set the carry flag (borrow flag)
+                carry_out = 1 if result < 0 else 0
+                
+                # Update flags only, don't change accumulator
+                self.update_flags(result & 0xFF, True, carry_out, True, ac)
+                
+                self.registers["PC"] += 1
+
+            elif opcode == "NOP":  # NOP (1 byte): No operation
+                # No operation - just increment the program counter
+                self.registers["PC"] += 1
             
             else:
                 self.error = f"Unknown opcode: {opcode}"

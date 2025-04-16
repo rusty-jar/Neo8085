@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
 # Local application imports
 from assembler import Assembler8085
 from processor import Processor8085
+from version import __version__, version_string, display_version
 
 class LineNumberArea(QWidget):
     """Widget for displaying line numbers and breakpoints in code editor"""
@@ -122,7 +123,14 @@ class AssemblyHighlighter(QSyntaxHighlighter):
         instructions = ["MVI", "MOV", "LXI", "LDA", "STA", "ADD", "ADI", "SUB", 
                         "INR", "DCR", "JMP", "JZ", "JNZ", "JC", "JNC", "JP", 
                         "JM", "JPE", "JPO", "HLT", "INX", "PUSH", "POP",
-                        "CALL", "RET", "CPI", "DAD", "XCHG"]
+                        "CALL", "RET", "CPI", "DAD", "XCHG",
+                        "LDAX", "STAX", "LHLD", "SHLD", "PCHL", "SPHL", "XTHL",
+                        "ANA", "ANI", "ORA", "ORI", "XRA", "XRI", "CMA", 
+                        "CMC", "STC", "RLC", "RRC", "RAL", "RAR",
+                        "ADC", "ACI", "SBB", "SBI", "DAA", "DCX",
+                        "CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO",
+                        "RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO",
+                        "RST", "CMP", "NOP"] 
 
         # Assembler directives
         directives = ["DS", "ORG", "END", "EQU"]
@@ -995,12 +1003,14 @@ class Simulator(QWidget):
         self.load_memory_display(0x0000)
         
         # Set code editor with sample program
-        self.code_editor.setPlainText(r"""; +===================================================================+
+        self.code_editor.setPlainText(rf"""; +===================================================================+
 ;     _   __           ____  ____  ____  ______
 ;    / | / /__  ____  ( __ )/ __ \( __ )/ ____/
 ;   /  |/ / _ \/ __ \/ __  / / / / __  /___ \  
 ;  / /|  /  __/ /_/ / /_/ / /_/ / /_/ /___/ /  
 ; /_/ |_/\___/\____/\____/\____/\____/_____/  
+;
+; Version: {display_version}
 ;
 ; Copyright 2025 (c) Shahibur Rahaman
 ; Licensed under GNU GPL v3.0
@@ -1690,15 +1700,15 @@ END
         QMessageBox.information(
             self, 
             "About Neo8085",
-            "Neo8085 - 8085 Microprocessor Simulator\n\n"
-            "Copyright (C) 2025 Shahibur Rahaman\n"
-            "Licensed under the GNU General Public License v3.0\n\n"
-            "A simulator for the 8085 microprocessor.\n"
-            "Version 0.0.1\n\n"
-            "This program is free software: you can redistribute it and/or modify "
-            "it under the terms of the GNU General Public License as published by "
-            "the Free Software Foundation, either version 3 of the License, or "
-            "(at your option) any later version."
+            f"Neo8085 - 8085 Microprocessor Simulator\n\n"
+            f"Copyright (C) 2025 Shahibur Rahaman\n"
+            f"Licensed under the GNU General Public License v3.0\n\n"
+            f"A simulator for the 8085 microprocessor.\n"
+            f"Version: {version_string}\n\n"
+            f"This program is free software: you can redistribute it and/or modify "
+            f"it under the terms of the GNU General Public License as published by "
+            f"the Free Software Foundation, either version 3 of the License, or "
+            f"(at your option) any later version."
         )
 
     def reset_simulation(self):
@@ -2084,4 +2094,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

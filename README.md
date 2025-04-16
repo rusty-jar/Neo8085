@@ -104,13 +104,41 @@ Use the built-in editor with syntax highlighting, line numbers, and breakpoint s
 
 ### Supported Instructions
 
-**Data Transfer**: `MOV`, `MVI`, `LXI`, `LDA`, `STA`, `XCHG`  
-**Arithmetic**: `ADD`, `ADI`, `SUB`, `INR`, `DCR`, `DAD`  
-**Logical**: `CPI`  
-**Branching**: `JMP`, `JZ`, `JNZ`, `JC`, `JNC`, `JP`, `JM`, `JPE`, `JPO`  
-**Stack**: `PUSH`, `POP`  
-**Subroutines**: `CALL`, `RET`  
-**Machine Control**: `HLT`
+### Supported Instructions
+
+**Data Transfer**: 
+- Register operations: `MOV`, `MVI`
+- Memory operations: `LDA`, `STA`, `LDAX`, `STAX`, `LHLD`, `SHLD` 
+- Register pair operations: `LXI`, `XCHG`, `XTHL`, `SPHL`, `PCHL`
+
+**Arithmetic**:
+- Basic operations: `ADD`, `ADI`, `SUB`, `INR`, `DCR`
+- With carry: `ADC`, `ACI`, `SBB`, `SBI`
+- Register pair operations: `INX`, `DCX`, `DAD`
+- BCD operations: `DAA`
+
+**Logical**:
+- Bitwise operations: `ANA`, `ANI`, `ORA`, `ORI`, `XRA`, `XRI`, `CMA`
+- Comparison: `CMP`, `CPI`
+- Rotation: `RLC`, `RRC`, `RAL`, `RAR`
+- Flag operations: `STC`, `CMC`
+
+**Branching**:
+- Unconditional: `JMP`, `CALL`, `RET`
+- Conditional jumps: `JZ`, `JNZ`, `JC`, `JNC`, `JP`, `JM`, `JPE`, `JPO`
+- Conditional calls: `CZ`, `CNZ`, `CC`, `CNC`, `CP`, `CM`, `CPE`, `CPO`
+- Conditional returns: `RZ`, `RNZ`, `RC`, `RNC`, `RP`, `RM`, `RPE`, `RPO`
+- Restart: `RST 0-7`
+
+**Stack Operations**:
+- `PUSH`, `POP`
+
+**Machine Control**:
+- `HLT`, `NOP`
+
+**Not Implemented**:
+- I/O operations: `IN`, `OUT`
+- Interrupt control: `EI`, `DI`, `RIM`, `SIM`
 
 ### Assembler Directives
 - `ORG`: Set starting address
