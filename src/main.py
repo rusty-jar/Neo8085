@@ -420,7 +420,7 @@ class Simulator(QWidget):
     
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle("Neo8085 - 8085 Microprocessor Simulator")
+        self.setWindowTitle(f"Neo8085 v{display_version} - 8085 Microprocessor Simulator")
         self.setGeometry(100, 50, 1280, 800)
         
         # Main layout
@@ -2056,17 +2056,17 @@ END
 
     def update_window_title(self):
         """Update window title to show the modification state"""
-        title = "Neo8085 - "
+        title = f"Neo8085 v{display_version} - "
         if self.current_file:
             filename = os.path.basename(self.current_file)
             if self.document_modified:
-                title += f"*{filename}"  # Add asterisk to indicate unsaved changes
+                title += f"{filename}* [Changes not saved]"  # Add asterisk to indicate unsaved changes
             else:
                 title += filename
         else:
             title += "Untitled"
             if self.document_modified:
-                title += "*"  # Add asterisk to indicate unsaved changes
+                title += "* [Changes not saved]"  # Add asterisk to indicate unsaved changes
         
         self.setWindowTitle(title)
 
