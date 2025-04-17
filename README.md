@@ -104,8 +104,6 @@ Use the built-in editor with syntax highlighting, line numbers, and breakpoint s
 
 ### Supported Instructions
 
-### Supported Instructions
-
 **Data Transfer**: 
 - Register operations: `MOV`, `MVI`
 - Memory operations: `LDA`, `STA`, `LDAX`, `STAX`, `LHLD`, `SHLD` 
@@ -160,7 +158,7 @@ Use the built-in editor with syntax highlighting, line numbers, and breakpoint s
 | Ctrl+Shift+F5       | Run without Highlighting  |
 | F8                  | Stop                      |
 | Ctrl+R              | Reset                     |
-| F9                  | Add/Remove Breakpoint     |
+| F9                  | Add Breakpoint            |
 
 ---
 
