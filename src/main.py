@@ -1091,7 +1091,7 @@ class Simulator(QWidget):
         right_panel.addLayout(memory_search_layout)
 
         # Memory Table
-        self.memory_table = QTableWidget(
+        self.memory_table = MemoryTableWidget(
             16, 18
         )  # 16 rows, 18 columns (decimal+hex address + 16 bytes)
         self.memory_table.setFont(QFont("Consolas", 10))
@@ -1114,7 +1114,8 @@ class Simulator(QWidget):
             padding: 2px;
         }
         QTableWidget::item:selected {
-            background-color: #CBE3F8;
+            background-color: #0B91FF;
+            color: #FFFFFF;
         }
         """
         )
@@ -1128,7 +1129,7 @@ class Simulator(QWidget):
         self.memory_table.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeToContents
         )
-        # Alternatively, set a fixed width that's wider than default:
+        # Alternatively, set a fixed width that's wider:
         self.memory_table.setColumnWidth(1, 80)  # Make hex address column 80px wide
         self.memory_table.verticalHeader().setDefaultSectionSize(28)
 
@@ -2053,11 +2054,9 @@ END
         form_layout.addRow("Decimal:", self.dec_input)
         form_layout.addRow("ASCII:", self.ascii_input)
 
-        # Add to layout
+        # Add fields to layout
         converter_layout.addWidget(converter_header)
         converter_layout.addLayout(form_layout)
-
-        # Remove padding at the bottom (no stretch)
 
         return converter_widget
 
@@ -2128,8 +2127,8 @@ END
                     if len(ascii_value) > 0:
                         value = ord(ascii_value[0])
                         self.hex_input.setText(
-                            hex(value)[2:].upper()
-                        )  # Remove '0x' prefix
+                            hex(value)[2:].upper())
+                        # Remove '0x' prefix
                         self.bin_input.setText(bin(value)[2:])  # Remove '0b' prefix
                         self.dec_input.setText(str(value))
                 else:
@@ -2311,6 +2310,13 @@ END
                 )
 
         self.setWindowTitle(title)
+
+
+class MemoryTableWidget(QTableWidget):
+    """Custom QTableWidget that clears selection when losing focus"""
+    def focusOutEvent(self, event):
+        self.clearSelection()
+        super().focusOutEvent(event)
 
 
 def main():
