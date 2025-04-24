@@ -14,8 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+
 class AssemblyOutput:
     """Container for the results of assembly process"""
+
     def __init__(self):
         self.memory = bytearray(0x10000)  # 64KB memory space
         self.parsed_program = []
@@ -27,39 +29,108 @@ class AssemblyOutput:
         self.program_memory_range = set()
         self.starting_address = 0x0000
 
+
 class Assembler8085:
     """
     8085 microprocessor assembly code parser and machine code generator.
     Handles parsing assembly source code into executable machine code.
     """
+
     def __init__(self):
         # Instruction metadata
         self.valid_opcodes = [
-            "MVI", "MOV", "LXI", "LDA", "STA", "ADD", "ADI", "SUB", "INR", "DCR",
-            "JMP", "JZ", "JNZ", "JC", "JNC", "JP", "JM", "JPE", "JPO", "HLT", "INX",
-            "PUSH", "POP", "CALL", "RET", "CPI", "DAD", "XCHG", "DS", "ORG", "END",
-            "EQU", "LDAX", "STAX", "LHLD", "SHLD", "PCHL", "SPHL", "XTHL",
-            "ANA", "ANI", "ORA", "ORI", "XRA", "XRI", "CMA", 
-            "CMC", "STC", "RLC", "RRC", "RAL", "RAR",
-            "ADC", "ACI", "SBB", "SBI", "DAA", "DCX",
-            "CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO",
-            "RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO",
-            "RST", "CMP", "NOP"
+            "MVI",
+            "MOV",
+            "LXI",
+            "LDA",
+            "STA",
+            "ADD",
+            "ADI",
+            "SUB",
+            "INR",
+            "DCR",
+            "JMP",
+            "JZ",
+            "JNZ",
+            "JC",
+            "JNC",
+            "JP",
+            "JM",
+            "JPE",
+            "JPO",
+            "HLT",
+            "INX",
+            "PUSH",
+            "POP",
+            "CALL",
+            "RET",
+            "CPI",
+            "DAD",
+            "XCHG",
+            "DS",
+            "ORG",
+            "END",
+            "EQU",
+            "LDAX",
+            "STAX",
+            "LHLD",
+            "SHLD",
+            "PCHL",
+            "SPHL",
+            "XTHL",
+            "ANA",
+            "ANI",
+            "ORA",
+            "ORI",
+            "XRA",
+            "XRI",
+            "CMA",
+            "CMC",
+            "STC",
+            "RLC",
+            "RRC",
+            "RAL",
+            "RAR",
+            "ADC",
+            "ACI",
+            "SBB",
+            "SBI",
+            "DAA",
+            "DCX",
+            "CC",
+            "CNC",
+            "CZ",
+            "CNZ",
+            "CP",
+            "CM",
+            "CPE",
+            "CPO",
+            "RC",
+            "RNC",
+            "RZ",
+            "RNZ",
+            "RP",
+            "RM",
+            "RPE",
+            "RPO",
+            "RST",
+            "CMP",
+            "NOP",
         ]
         self.valid_registers = ["A", "B", "C", "D", "E", "H", "L", "M"]
         self.valid_register_pairs = ["B", "D", "H", "SP"]
-    
+
     def assemble(self, code):
         """
         Assembles the source code and returns the generated machine code
         along with metadata for debugging and execution.
-        
+
         Args:
             code (list): List of assembly code lines, one per element
                 Lines may contain labels, directives, instructions, and comments
                 Comments start with ';' and extend to the end of the line
                 Labels end with ':' and may be on the same line as an instruction
-        
+
         Returns:
             AssemblyOutput: Object containing:
                 - memory: Fully populated 64KB memory array with machine code
@@ -71,30 +142,30 @@ class Assembler8085:
                 - program_end_address: End address of the assembled program
                 - program_memory_range: Set of addresses containing program code
                 - starting_address: Beginning address of the program
-                
+
         Raises:
             SyntaxError: If there are syntax or semantic errors in the code
         """
         output = AssemblyOutput()
-        
+
         # Convert program to uppercase for consistent parsing
         uppercase_code = []
         for line in code:
             uppercase_code.append(line.upper())
-        
+
         code = uppercase_code
-        
+
         # Special pre-pass: Process all EQU directives first
         self._preprocess_equ_directives(code, output)
-        
+
         # First pass: Find labels and validate syntax
         self._first_pass(code, output)
-        
+
         # Second pass: Build program, resolve labels, and generate machine code
         self._second_pass(code, output)
-        
+
         return output
-    
+
     def _preprocess_equ_directives(self, code, output):
         """
         Pre-process to handle all EQU directives with support for nested definitions
@@ -103,75 +174,79 @@ class Assembler8085:
         # First, collect all EQU definitions
         equ_definitions = []
         for line_num, line in enumerate(code, 1):
-            line = line.split(';', 1)[0].strip()  # Remove comments
+            line = line.split(";", 1)[0].strip()  # Remove comments
             if not line:
                 continue
-                
+
             parts = line.split()
             if len(parts) >= 3 and "EQU" in parts:
                 equ_idx = parts.index("EQU")
                 if equ_idx > 0:  # Must have a symbol before EQU
                     symbol = parts[0]
-                    if symbol.endswith(':'):  # Remove colon if present
+                    if symbol.endswith(":"):  # Remove colon if present
                         symbol = symbol[:-1]
-                    value_expr = ' '.join(parts[equ_idx+1:])
+                    value_expr = " ".join(parts[equ_idx + 1 :])
                     equ_definitions.append((symbol, value_expr, line_num))
-        
+
         # Process EQU definitions in order, resolving dependencies
         processed = set()
         while equ_definitions:
             progress = False
             remaining = []
-            
+
             for symbol, value_expr, line_num in equ_definitions:
                 # Try to evaluate the expression
                 value = self._evaluate_expression(value_expr, output, line_num)
-                
+
                 if value is not None:  # Successfully evaluated
                     output.symbols[symbol] = value & 0xFFFF  # Ensure 16-bit value
                     processed.add(symbol)
                     progress = True
                 else:
                     remaining.append((symbol, value_expr, line_num))
-            
+
             if not progress and remaining:
                 # Could not make progress in resolving symbols
                 # This indicates circular references or undefined symbols
                 unresolved = [s for s, _, _ in remaining]
-                raise SyntaxError(f"Could not resolve EQU symbols: {', '.join(unresolved)}")
-                
+                raise SyntaxError(
+                    f"Could not resolve EQU symbols: {', '.join(unresolved)}"
+                )
+
             equ_definitions = remaining
 
     def _evaluate_expression(self, expr, output, line_num):
         """
         Evaluate an arithmetic expression that may contain symbols and operators.
         Supports + - * / & | ^ << >> operators with left-to-right evaluation.
-        
+
         Args:
             expr (str): The expression to evaluate (may contain operators and symbols)
             output (AssemblyOutput): Output container with symbol definitions
             line_num (int): Line number for error reporting
-            
+
         Returns:
             int: The evaluated numeric result, or None if symbols can't be resolved yet
-            
+
         Raises:
             SyntaxError: If the expression syntax is invalid
         """
         # Remove any comments that might be present in the expression
-        if ';' in expr:
-            expr = expr.split(';', 1)[0].strip()
-            
+        if ";" in expr:
+            expr = expr.split(";", 1)[0].strip()
+
         # Simple case: direct symbol or number with no operators
-        if not any(op in expr for op in ['*', '/', '+', '-', '&', '|', '^', '<<', '>>']):
+        if not any(
+            op in expr for op in ["*", "/", "+", "-", "&", "|", "^", "<<", ">>"]
+        ):
             return self._resolve_symbol_or_value(expr, output)
-        
+
         # Tokenize the expression into operands and operators
         tokens = []
         current_token = ""
-        operators = ['*', '/', '+', '-', '&', '|', '^']  # Single-char operators
-        multi_char_operators = ['<<', '>>']
-        
+        operators = ["*", "/", "+", "-", "&", "|", "^"]  # Single-char operators
+        multi_char_operators = ["<<", ">>"]
+
         # Parse the expression character by character, separating operands and operators
         i = 0
         while i < len(expr):
@@ -182,16 +257,16 @@ class Assembler8085:
                     current_token = ""
                 i += 1
                 continue
-                
+
             # Check for multi-character operators (<<, >>)
-            if i < len(expr) - 1 and expr[i:i+2] in multi_char_operators:
+            if i < len(expr) - 1 and expr[i : i + 2] in multi_char_operators:
                 if current_token:
                     tokens.append(current_token)
                     current_token = ""
-                tokens.append(expr[i:i+2])
+                tokens.append(expr[i : i + 2])
                 i += 2
                 continue
-                
+
             # Check for single-character operators (+, -, *, /, &, |, ^)
             if expr[i] in operators:
                 if current_token:
@@ -200,64 +275,64 @@ class Assembler8085:
                 tokens.append(expr[i])
                 i += 1
                 continue
-                
+
             # Add to current token (part of an operand)
             current_token += expr[i]
             i += 1
-        
+
         # Add final token if any remains
         if current_token:
             tokens.append(current_token)
-        
+
         # Simple validation - we need at least one operand
         if len(tokens) < 3:
             # Not a complete expression, might be missing operands
             if len(tokens) == 1:
                 return self._resolve_symbol_or_value(tokens[0], output)
             return None
-        
+
         # Evaluate the expression from left to right (no operator precedence)
         result = self._resolve_symbol_or_value(tokens[0], output)
-        
+
         # If we can't resolve the first operand, can't evaluate the expression
         if result is None:
             return None
-        
+
         # Apply each operator with left-to-right evaluation
         for i in range(1, len(tokens), 2):
-            if i+1 >= len(tokens):
+            if i + 1 >= len(tokens):
                 break  # No more operands
-                
+
             operator = tokens[i]
-            operand_str = tokens[i+1]
-            
+            operand_str = tokens[i + 1]
+
             # Resolve the operand (could be a symbol or number)
             operand = self._resolve_symbol_or_value(operand_str, output)
-            
+
             # If we can't resolve this operand, we can't evaluate further
             if operand is None:
                 return None
-                
+
             # Apply the operator to accumulate the result
-            if operator == '+':
+            if operator == "+":
                 result += operand
-            elif operator == '-':
+            elif operator == "-":
                 result -= operand
-            elif operator == '*':
+            elif operator == "*":
                 result *= operand
-            elif operator == '/':
+            elif operator == "/":
                 result //= operand  # Integer division
-            elif operator == '&':
+            elif operator == "&":
                 result &= operand  # Bitwise AND
-            elif operator == '|':
+            elif operator == "|":
                 result |= operand  # Bitwise OR
-            elif operator == '^':
+            elif operator == "^":
                 result ^= operand  # Bitwise XOR
-            elif operator == '<<':
+            elif operator == "<<":
                 result <<= operand  # Bit shift left
-            elif operator == '>>':
+            elif operator == ">>":
                 result >>= operand  # Bit shift right
-        
+
         return result
 
     def _resolve_symbol_or_value(self, value_str, output):
@@ -265,11 +340,11 @@ class Assembler8085:
         Try to resolve a symbol or parse a value. Returns None if symbol not found.
         """
         value_str = value_str.strip()
-        
+
         # Check if it's a symbol
         if value_str in output.symbols:
             return output.symbols[value_str]
-        
+
         # Otherwise try to parse as a number
         try:
             return self._parse_number(value_str)
@@ -279,90 +354,98 @@ class Assembler8085:
     def _first_pass(self, code, output):
         """
         First pass of assembly process - validates syntax and collects labels
-        
+
         Args:
             code (list): Assembly code lines
             output (AssemblyOutput): Output container to store results
-            
+
         Raises:
             SyntaxError: If there are syntax errors in the code
         """
         address = 0x0000
         first_org_seen = False
-        
+
         for line_num, line in enumerate(code, 1):
             original_line = line
-            line = line.split(';', 1)[0].strip()  # Remove comments
+            line = line.split(";", 1)[0].strip()  # Remove comments
             if not line:
                 continue
-                
+
             # Check for labels
             parts = line.split()
             label = None
-            
-            if ':' in parts[0]:
+
+            if ":" in parts[0]:
                 label_part = parts[0]
-                if label_part.endswith(':'):
+                if label_part.endswith(":"):
                     label = label_part[:-1]
                 else:
                     # Label might be combined with instruction (LABEL:INSTR)
-                    label_parts = label_part.split(':')
+                    label_parts = label_part.split(":")
                     if len(label_parts) == 2:
                         label = label_parts[0]
                         # Reconstruct the line without the label
                         parts[0] = label_parts[1]
-                        line = ' '.join(parts)
+                        line = " ".join(parts)
                     else:
-                        raise SyntaxError(f"Line {line_num}: Invalid label format: {label_part}")
-                        
+                        raise SyntaxError(
+                            f"Line {line_num}: Invalid label format: {label_part}"
+                        )
+
                 if label:
                     if label in output.labels:
                         raise SyntaxError(f"Line {line_num}: Duplicate label: {label}")
                     output.labels[label] = address
-            
+
             # Skip if line only contains a label
-            if not parts or (len(parts) == 1 and parts[0].endswith(':')):
+            if not parts or (len(parts) == 1 and parts[0].endswith(":")):
                 continue
-                
+
             # Get instruction/directive
-            instruction = parts[0] if not parts[0].endswith(':') else parts[1]
-            
+            instruction = parts[0] if not parts[0].endswith(":") else parts[1]
+
             if instruction not in self.valid_opcodes:
                 # Check if the instruction is combined with the label
-                if ':' in instruction:
-                    instr_parts = instruction.split(':')
+                if ":" in instruction:
+                    instr_parts = instruction.split(":")
                     if len(instr_parts) == 2 and instr_parts[1] in self.valid_opcodes:
                         instruction = instr_parts[1]
                     else:
-                        raise SyntaxError(f"Line {line_num}: Invalid instruction: {instruction}")
+                        raise SyntaxError(
+                            f"Line {line_num}: Invalid instruction: {instruction}"
+                        )
                 else:
-                    raise SyntaxError(f"Line {line_num}: Unknown instruction: {instruction}")
-            
+                    raise SyntaxError(
+                        f"Line {line_num}: Unknown instruction: {instruction}"
+                    )
+
             # Handle ORG directive
             if instruction == "ORG":
                 if len(parts) < 2:
                     raise SyntaxError(f"Line {line_num}: ORG requires an address")
-                    
+
                 try:
                     org_address = self._parse_number(parts[1])
                     address = org_address
-                    
+
                     if not first_org_seen:
                         output.starting_address = address
                         first_org_seen = True
                 except ValueError:
-                    raise SyntaxError(f"Line {line_num}: Invalid ORG address: {parts[1]}")
-                    
+                    raise SyntaxError(
+                        f"Line {line_num}: Invalid ORG address: {parts[1]}"
+                    )
+
                 continue  # ORG doesn't generate code
-                
+
             # Handle DS (Define Storage) directive
             if instruction == "DS":
-                instruction_index = 1 if parts[0].endswith(':') else 0
+                instruction_index = 1 if parts[0].endswith(":") else 0
                 size_index = instruction_index + 1
-                
+
                 if len(parts) <= size_index:
                     raise SyntaxError(f"Line {line_num}: DS requires a size")
-                
+
                 try:
                     size_arg = parts[size_index]
                     # Check if it's a symbol first
@@ -372,44 +455,89 @@ class Assembler8085:
                         size = self._parse_number(size_arg)
                     address += size
                 except ValueError:
-                    raise SyntaxError(f"Line {line_num}: Invalid DS size: {parts[size_index]}")
-                    
+                    raise SyntaxError(
+                        f"Line {line_num}: Invalid DS size: {parts[size_index]}"
+                    )
+
                 continue  # DS doesn't generate code
-                
+
             # Handle END directive
             if instruction == "END":
                 break  # End of assembly
-                
+
             # Skip EQU directives in first pass (already processed)
             if instruction == "EQU":
                 continue
-                
+
             # Map the line to the current address
             output.line_to_address_map[line_num] = address
             output.address_to_line_map[address] = line_num
-            
+
             # Calculate instruction size and advance address
-            if instruction == "MVI" or instruction == "ADI" or instruction == "CPI":  # 2 bytes
+            if (
+                instruction == "MVI" or instruction == "ADI" or instruction == "CPI"
+            ):  # 2 bytes
                 address += 2
-            elif instruction == "LXI" or instruction == "LDA" or instruction == "STA" or instruction == "JMP" or \
-                 instruction == "JZ" or instruction == "JNZ" or instruction == "JC" or instruction == "JNC" or \
-                 instruction == "JP" or instruction == "JM" or instruction == "JPE" or instruction == "JPO" or \
-                 instruction == "CALL":  # 3 bytes
+            elif (
+                instruction == "LXI"
+                or instruction == "LDA"
+                or instruction == "STA"
+                or instruction == "JMP"
+                or instruction == "JZ"
+                or instruction == "JNZ"
+                or instruction == "JC"
+                or instruction == "JNC"
+                or instruction == "JP"
+                or instruction == "JM"
+                or instruction == "JPE"
+                or instruction == "JPO"
+                or instruction == "CALL"
+            ):  # 3 bytes
                 address += 3
-            elif instruction == "MOV" or instruction == "ADD" or instruction == "SUB" or \
-                 instruction == "INR" or instruction == "DCR" or instruction == "HLT" or \
-                 instruction == "INX" or instruction == "DAD" or instruction == "XCHG" or \
-                 instruction == "PUSH" or instruction == "POP" or instruction == "RET":  # 1 byte
+            elif (
+                instruction == "MOV"
+                or instruction == "ADD"
+                or instruction == "SUB"
+                or instruction == "INR"
+                or instruction == "DCR"
+                or instruction == "HLT"
+                or instruction == "INX"
+                or instruction == "DAD"
+                or instruction == "XCHG"
+                or instruction == "PUSH"
+                or instruction == "POP"
+                or instruction == "RET"
+            ):  # 1 byte
                 address += 1
-            elif instruction == "LDAX" or instruction == "STAX" or instruction == "PCHL" or instruction == "SPHL" or instruction == "XTHL":  # 1 byte
+            elif (
+                instruction == "LDAX"
+                or instruction == "STAX"
+                or instruction == "PCHL"
+                or instruction == "SPHL"
+                or instruction == "XTHL"
+            ):  # 1 byte
                 address += 1
-            elif instruction == "LHLD" or instruction == "SHLD":  # 3 bytes (opcode + address)
+            elif (
+                instruction == "LHLD" or instruction == "SHLD"
+            ):  # 3 bytes (opcode + address)
                 address += 3
             elif instruction in ["ANA", "ORA", "XRA"]:  # 1 byte (with register operand)
                 address += 1
-            elif instruction in ["ANI", "ORI", "XRI"]:  # 2 bytes (with immediate operand)
+            elif instruction in [
+                "ANI",
+                "ORI",
+                "XRI",
+            ]:  # 2 bytes (with immediate operand)
                 address += 2
-            elif instruction in ["CMA", "CMC", "STC", "RLC", "RRC", "RAL", "RAR"]:  # 1 byte (no operands)
+            elif instruction in [
+                "CMA",
+                "CMC",
+                "STC",
+                "RLC",
+                "RRC",
+                "RAL",
+                "RAR",
+            ]:  # 1 byte (no operands)
                 address += 1
             elif instruction in ["ADC", "SBB"]:  # 1 byte (with register operand)
                 address += 1
@@ -419,9 +547,27 @@ class Assembler8085:
                 address += 1
             elif instruction == "DCX":  # 1 byte (with register pair operand)
                 address += 1
-            elif instruction in ["CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO"]:  # 3 bytes (conditional calls)
+            elif instruction in [
+                "CC",
+                "CNC",
+                "CZ",
+                "CNZ",
+                "CP",
+                "CM",
+                "CPE",
+                "CPO",
+            ]:  # 3 bytes (conditional calls)
                 address += 3
-            elif instruction in ["RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO"]:  # 1 byte (conditional returns)
+            elif instruction in [
+                "RC",
+                "RNC",
+                "RZ",
+                "RNZ",
+                "RP",
+                "RM",
+                "RPE",
+                "RPO",
+            ]:  # 1 byte (conditional returns)
                 address += 1
             elif instruction == "RST":  # 1 byte (restart)
                 address += 1
@@ -434,118 +580,120 @@ class Assembler8085:
         """
         Resolves a value that might be a symbol, label, or numeric literal.
         Performs hierarchical lookup: first symbols, then labels, then parses as number.
-        
+
         Args:
             value_str (str): The value string to resolve
             output (AssemblyOutput): The output container with symbols and labels tables
-            
+
         Returns:
             int: The resolved numeric value
-            
+
         Raises:
             ValueError: If the value cannot be resolved to a number
         """
         value_str = value_str.strip()
-        
+
         # Check if it's a symbol
         if value_str in output.symbols:
             return output.symbols[value_str]
-        
+
         # If not a symbol, check if it's a label
         if value_str in output.labels:
             return output.labels[value_str]
-        
+
         # Otherwise try to parse as a number
         try:
             return self._parse_number(value_str)
         except ValueError:
             raise ValueError(f"Could not resolve value: {value_str}")
-    
+
     def _second_pass(self, code, output):
         """
         Second pass - generate machine code and build program structures
         """
         address = 0x0000
         for line_num, line in enumerate(code, 1):
-            line = line.split(';', 1)[0].strip()  # Remove comments
+            line = line.split(";", 1)[0].strip()  # Remove comments
             if not line:
                 continue
-                
+
             # Skip lines with only labels
             parts = line.split()
             if not parts:
                 continue
-                
+
             # Handle label-only lines
-            if len(parts) == 1 and parts[0].endswith(':'):
+            if len(parts) == 1 and parts[0].endswith(":"):
                 continue
-                
+
             # Extract instruction, handling labels
             tokens = []
-            if ':' in parts[0]:
-                if parts[0].endswith(':'):  # Label is separate
+            if ":" in parts[0]:
+                if parts[0].endswith(":"):  # Label is separate
                     if len(parts) == 1:
                         continue  # Label-only line
                     tokens = parts[1:]  # Skip the label
                 else:  # Label is combined with instruction
-                    label_parts = parts[0].split(':')
+                    label_parts = parts[0].split(":")
                     if len(label_parts) == 2:
                         tokens = [label_parts[1]] + parts[1:]
                     else:
                         continue  # Malformed line (error caught in first pass)
             else:
                 tokens = parts
-                
+
             opcode = tokens[0]
-            
+
             # Skip EQU directives
             if opcode == "EQU":
                 continue
-                
+
             # Handle ORG directive
             if opcode == "ORG":
                 address = self._parse_number(tokens[1])
                 continue
-                
+
             # Handle DS directive
             if opcode == "DS":
                 # Adjust for tokens layout based on label presence
                 size_index = 2 if len(tokens) > 2 and tokens[0] == "DS" else 1
-                
+
                 try:
-                    size_arg = tokens[size_index] if size_index < len(tokens) else tokens[1]
+                    size_arg = (
+                        tokens[size_index] if size_index < len(tokens) else tokens[1]
+                    )
                     # Try to resolve as symbol first
                     if size_arg in output.symbols:
                         size = output.symbols[size_arg]
                     else:
                         size = self._parse_number(size_arg)
-                    
+
                     # Mark memory range as allocated but don't generate code
                     for i in range(size):
                         output.program_memory_range.add(address + i)
-                        
+
                     address += size
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: Invalid DS size: {size_arg}")
                 continue
-                
+
             # Handle END directive
             if opcode == "END":
                 break
-                
+
             # Store tokens for this instruction
             output.parsed_program.append((address, tokens))
-            
+
             # Mark this memory address as part of program
             output.program_memory_range.add(address)
-            
+
             # Generate machine code based on instruction type
             if opcode == "MVI":  # MVI r,data (2 bytes: opcode, immediate value)
                 # MVI opcodes: base 0x06 + (reg_code * 8)
                 # Register codes: B=0, C=1, D=2, E=3, H=4, L=5, M=6, A=7
                 reg = tokens[1].strip(",")
                 value_str = tokens[2].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFF
                     reg_code = self._get_reg_code(reg)
@@ -553,31 +701,33 @@ class Assembler8085:
                     output.memory[address + 1] = value
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 address += 2
-                
+
             elif opcode == "MOV":  # MOV r,r (1 byte)
                 # MOV opcodes: 0x40 + (dest_reg * 8) + src_reg
                 # Register codes: B=0, C=1, D=2, E=3, H=4, L=5, M=6, A=7
                 dest_reg = tokens[1].strip(",")
                 src_reg = tokens[2].strip(",;")
-                
+
                 try:
                     dest_code = self._get_reg_code(dest_reg)
                     src_code = self._get_reg_code(src_reg)
                     output.memory[address] = 0x40 + (dest_code * 8) + src_code
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
-            elif opcode == "LXI":  # LXI rp,data16 (3 bytes: opcode, low byte, high byte)
+
+            elif (
+                opcode == "LXI"
+            ):  # LXI rp,data16 (3 bytes: opcode, low byte, high byte)
                 # LXI opcodes: base 0x01 + (rp_code * 16)
                 # Register pair codes: B=0, D=1, H=2, SP=3
                 rp = tokens[1].strip(",")
                 value_str = tokens[2].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
                     rp_code = self._get_rp_code(rp)
@@ -586,14 +736,16 @@ class Assembler8085:
                     output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 output.program_memory_range.add(address + 2)
                 address += 3
-                
-            elif opcode == "LDA":  # LDA addr (3 bytes: opcode=0x3A, low byte, high byte)
+
+            elif (
+                opcode == "LDA"
+            ):  # LDA addr (3 bytes: opcode=0x3A, low byte, high byte)
                 value_str = tokens[1].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
                     output.memory[address] = 0x3A
@@ -601,14 +753,16 @@ class Assembler8085:
                     output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 output.program_memory_range.add(address + 2)
                 address += 3
-                
-            elif opcode == "STA":  # STA addr (3 bytes: opcode=0x32, low byte, high byte)
+
+            elif (
+                opcode == "STA"
+            ):  # STA addr (3 bytes: opcode=0x32, low byte, high byte)
                 value_str = tokens[1].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
                     output.memory[address] = 0x32
@@ -616,81 +770,98 @@ class Assembler8085:
                     output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 output.program_memory_range.add(address + 2)
                 address += 3
-                
+
             elif opcode == "ADD":  # ADD r (1 byte)
                 # ADD opcodes: 0x80 + reg_code
                 reg = tokens[1].strip(",;")
-                
+
                 try:
                     reg_code = self._get_reg_code(reg)
                     output.memory[address] = 0x80 + reg_code
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
+
             elif opcode == "ADI":  # ADI data (2 bytes: opcode=0xC6, immediate value)
                 value_str = tokens[1].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFF
                     output.memory[address] = 0xC6
                     output.memory[address + 1] = value
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 address += 2
-                
+
             elif opcode == "SUB":  # SUB r (1 byte)
                 # SUB opcodes: 0x90 + reg_code
                 reg = tokens[1].strip(",;")
-                
+
                 try:
                     reg_code = self._get_reg_code(reg)
                     output.memory[address] = 0x90 + reg_code
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
+
             elif opcode == "INR":  # INR r (1 byte)
                 # INR opcodes: 0x04 + (reg_code * 8)
                 reg = tokens[1].strip(",;")
-                
+
                 try:
                     reg_code = self._get_reg_code(reg)
                     output.memory[address] = 0x04 + (reg_code * 8)
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
+
             elif opcode == "DCR":  # DCR r (1 byte)
                 # DCR opcodes: 0x05 + (reg_code * 8)
                 reg = tokens[1].strip(",;")
-                
+
                 try:
                     reg_code = self._get_reg_code(reg)
                     output.memory[address] = 0x05 + (reg_code * 8)
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
-            elif opcode in ["JMP", "JZ", "JNZ", "JC", "JNC", "JP", "JM", "JPE", "JPO"]:  # Jumps (3 bytes)
+
+            elif opcode in [
+                "JMP",
+                "JZ",
+                "JNZ",
+                "JC",
+                "JNC",
+                "JP",
+                "JM",
+                "JPE",
+                "JPO",
+            ]:  # Jumps (3 bytes)
                 # Jump opcodes: JMP=0xC3, JZ=0xCA, JNZ=0xC2, JC=0xDA, JNC=0xD2, JP=0xF2, JM=0xFA, JPE=0xEA, JPO=0xE2
                 value_str = tokens[1].strip(",;")
-                
+
                 jump_opcodes = {
-                    "JMP": 0xC3, "JZ": 0xCA, "JNZ": 0xC2, "JC": 0xDA, "JNC": 0xD2,
-                    "JP": 0xF2, "JM": 0xFA, "JPE": 0xEA, "JPO": 0xE2
+                    "JMP": 0xC3,
+                    "JZ": 0xCA,
+                    "JNZ": 0xC2,
+                    "JC": 0xDA,
+                    "JNC": 0xD2,
+                    "JP": 0xF2,
+                    "JM": 0xFA,
+                    "JPE": 0xEA,
+                    "JPO": 0xE2,
                 }
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
                     output.memory[address] = jump_opcodes[opcode]
@@ -699,32 +870,34 @@ class Assembler8085:
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
                 except KeyError:
-                    raise SyntaxError(f"Line {line_num}: Invalid jump instruction: {opcode}")
-                
+                    raise SyntaxError(
+                        f"Line {line_num}: Invalid jump instruction: {opcode}"
+                    )
+
                 output.program_memory_range.add(address + 1)
                 output.program_memory_range.add(address + 2)
                 address += 3
-                
+
             elif opcode == "HLT":  # HLT (1 byte: opcode=0x76)
                 output.memory[address] = 0x76
                 address += 1
-                
+
             elif opcode == "INX":  # INX rp (1 byte)
                 # INX opcodes: 0x03 + (rp_code * 16)
                 rp = tokens[1].strip(",;")
-                
+
                 try:
                     rp_code = self._get_rp_code(rp)
                     output.memory[address] = 0x03 + (rp_code * 16)
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
+
             elif opcode == "PUSH":  # PUSH rp (1 byte)
                 # PUSH opcodes: 0xC5 + (rp_code * 16)
                 rp = tokens[1].strip(",;")
-                
+
                 # Special case: PUSH PSW (Program Status Word)
                 if rp == "PSW":
                     output.memory[address] = 0xF5
@@ -735,13 +908,13 @@ class Assembler8085:
                     except ValueError as e:
                         if rp != "PSW":  # PSW already handled
                             raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
+
             elif opcode == "POP":  # POP rp (1 byte)
                 # POP opcodes: 0xC1 + (rp_code * 16)
                 rp = tokens[1].strip(",;")
-                
+
                 # Special case: POP PSW (Program Status Word)
                 if rp == "PSW":
                     output.memory[address] = 0xF1
@@ -752,12 +925,14 @@ class Assembler8085:
                     except ValueError as e:
                         if rp != "PSW":  # PSW already handled
                             raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
-            elif opcode == "CALL":  # CALL addr (3 bytes: opcode=0xCD, low byte, high byte)
+
+            elif (
+                opcode == "CALL"
+            ):  # CALL addr (3 bytes: opcode=0xCD, low byte, high byte)
                 value_str = tokens[1].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
                     output.memory[address] = 0xCD
@@ -765,40 +940,40 @@ class Assembler8085:
                     output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 output.program_memory_range.add(address + 2)
                 address += 3
-                
+
             elif opcode == "RET":  # RET (1 byte: opcode=0xC9)
                 output.memory[address] = 0xC9
                 address += 1
-                
+
             elif opcode == "CPI":  # CPI data (2 bytes: opcode=0xFE, immediate value)
                 value_str = tokens[1].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFF
                     output.memory[address] = 0xFE
                     output.memory[address + 1] = value
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 address += 2
-                
+
             elif opcode == "DAD":  # DAD rp (1 byte)
                 # DAD opcodes: 0x09 + (rp_code * 16)
                 rp = tokens[1].strip(",;")
-                
+
                 try:
                     rp_code = self._get_rp_code(rp)
                     output.memory[address] = 0x09 + (rp_code * 16)
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
-                
+
             elif opcode == "XCHG":  # XCHG (1 byte: opcode=0xEB)
                 output.memory[address] = 0xEB
                 address += 1
@@ -806,32 +981,38 @@ class Assembler8085:
             elif opcode == "LDAX":  # LDAX rp (1 byte)
                 # LDAX opcodes: B=0x0A, D=0x1A
                 rp = tokens[1].strip(",;")
-                
+
                 if rp == "B":
                     output.memory[address] = 0x0A
                 elif rp == "D":
                     output.memory[address] = 0x1A
                 else:
-                    raise SyntaxError(f"Line {line_num}: LDAX only supports B or D register pairs")
-                
+                    raise SyntaxError(
+                        f"Line {line_num}: LDAX only supports B or D register pairs"
+                    )
+
                 address += 1
 
             elif opcode == "STAX":  # STAX rp (1 byte)
                 # STAX opcodes: B=0x02, D=0x12
                 rp = tokens[1].strip(",;")
-                
+
                 if rp == "B":
                     output.memory[address] = 0x02
                 elif rp == "D":
                     output.memory[address] = 0x12
                 else:
-                    raise SyntaxError(f"Line {line_num}: STAX only supports B or D register pairs")
-                
+                    raise SyntaxError(
+                        f"Line {line_num}: STAX only supports B or D register pairs"
+                    )
+
                 address += 1
 
-            elif opcode == "LHLD":  # LHLD addr (3 bytes: opcode=0x2A, low byte, high byte)
+            elif (
+                opcode == "LHLD"
+            ):  # LHLD addr (3 bytes: opcode=0x2A, low byte, high byte)
                 value_str = tokens[1].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
                     output.memory[address] = 0x2A
@@ -839,14 +1020,16 @@ class Assembler8085:
                     output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 output.program_memory_range.add(address + 2)
                 address += 3
 
-            elif opcode == "SHLD":  # SHLD addr (3 bytes: opcode=0x22, low byte, high byte)
+            elif (
+                opcode == "SHLD"
+            ):  # SHLD addr (3 bytes: opcode=0x22, low byte, high byte)
                 value_str = tokens[1].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
                     output.memory[address] = 0x22
@@ -854,7 +1037,7 @@ class Assembler8085:
                     output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 output.program_memory_range.add(address + 2)
                 address += 3
@@ -875,7 +1058,7 @@ class Assembler8085:
                 reg = tokens[1].strip(",;")
                 if reg not in self.valid_registers:
                     raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
-                
+
                 reg_code = self._get_reg_code(reg)
                 output.memory[address] = 0xA0 | reg_code
                 address += 1
@@ -884,11 +1067,11 @@ class Assembler8085:
                 value_str = tokens[1].strip(",;")
                 try:
                     value = self._parse_number(value_str) & 0xFF
-                    output.memory[address] = 0xE6      # Opcode
+                    output.memory[address] = 0xE6  # Opcode
                     output.memory[address + 1] = value  # Immediate data
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 address += 2
 
@@ -896,7 +1079,7 @@ class Assembler8085:
                 reg = tokens[1].strip(",;")
                 if reg not in self.valid_registers:
                     raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
-                
+
                 reg_code = self._get_reg_code(reg)
                 output.memory[address] = 0xB0 | reg_code
                 address += 1
@@ -905,11 +1088,11 @@ class Assembler8085:
                 value_str = tokens[1].strip(",;")
                 try:
                     value = self._parse_number(value_str) & 0xFF
-                    output.memory[address] = 0xF6      # Opcode
+                    output.memory[address] = 0xF6  # Opcode
                     output.memory[address + 1] = value  # Immediate data
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 address += 2
 
@@ -917,7 +1100,7 @@ class Assembler8085:
                 reg = tokens[1].strip(",;")
                 if reg not in self.valid_registers:
                     raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
-                
+
                 reg_code = self._get_reg_code(reg)
                 output.memory[address] = 0xA8 | reg_code
                 address += 1
@@ -926,11 +1109,11 @@ class Assembler8085:
                 value_str = tokens[1].strip(",;")
                 try:
                     value = self._parse_number(value_str) & 0xFF
-                    output.memory[address] = 0xEE      # Opcode
+                    output.memory[address] = 0xEE  # Opcode
                     output.memory[address + 1] = value  # Immediate data
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 address += 2
 
@@ -958,7 +1141,9 @@ class Assembler8085:
                 output.memory[address] = 0x17
                 address += 1
 
-            elif opcode == "RAR":  # RAR (1 byte): Rotate accumulator right through carry
+            elif (
+                opcode == "RAR"
+            ):  # RAR (1 byte): Rotate accumulator right through carry
                 output.memory[address] = 0x1F
                 address += 1
 
@@ -966,7 +1151,7 @@ class Assembler8085:
                 reg = tokens[1].strip(",;")
                 if reg not in self.valid_registers:
                     raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
-                
+
                 reg_code = self._get_reg_code(reg)
                 output.memory[address] = 0x88 | reg_code
                 address += 1
@@ -975,11 +1160,11 @@ class Assembler8085:
                 value_str = tokens[1].strip(",;")
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFF
-                    output.memory[address] = 0xCE      # Opcode
+                    output.memory[address] = 0xCE  # Opcode
                     output.memory[address + 1] = value  # Immediate data
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 address += 2
 
@@ -987,7 +1172,7 @@ class Assembler8085:
                 reg = tokens[1].strip(",;")
                 if reg not in self.valid_registers:
                     raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
-                
+
                 reg_code = self._get_reg_code(reg)
                 output.memory[address] = 0x98 | reg_code
                 address += 1
@@ -996,11 +1181,11 @@ class Assembler8085:
                 value_str = tokens[1].strip(",;")
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFF
-                    output.memory[address] = 0xDE      # Opcode
+                    output.memory[address] = 0xDE  # Opcode
                     output.memory[address + 1] = value  # Immediate data
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 address += 2
 
@@ -1010,30 +1195,30 @@ class Assembler8085:
 
             elif opcode == "DCX":  # DCX rp (1 byte): Decrement register pair
                 reg_pair = tokens[1].strip(",;")
-                
+
                 try:
                     rp_code = self._get_rp_code(reg_pair)
                     output.memory[address] = 0x0B + (rp_code * 16)
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 address += 1
 
             elif opcode in ["CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO"]:
                 # Conditional call opcodes mapping
                 call_opcodes = {
-                    "CC": 0xDC,   # Call if carry
+                    "CC": 0xDC,  # Call if carry
                     "CNC": 0xD4,  # Call if no carry
-                    "CZ": 0xCC,   # Call if zero
+                    "CZ": 0xCC,  # Call if zero
                     "CNZ": 0xC4,  # Call if not zero
-                    "CP": 0xF4,   # Call if positive (S=0)
-                    "CM": 0xFC,   # Call if minus (S=1)
+                    "CP": 0xF4,  # Call if positive (S=0)
+                    "CM": 0xFC,  # Call if minus (S=1)
                     "CPE": 0xEC,  # Call if parity even
-                    "CPO": 0xE4   # Call if parity odd
+                    "CPO": 0xE4,  # Call if parity odd
                 }
-                
+
                 value_str = tokens[1].strip(",;")
-                
+
                 try:
                     value = self._resolve_symbol_or_number(value_str, output) & 0xFFFF
                     output.memory[address] = call_opcodes[opcode]
@@ -1041,7 +1226,7 @@ class Assembler8085:
                     output.memory[address + 2] = (value >> 8) & 0xFF  # High byte
                 except ValueError as e:
                     raise SyntaxError(f"Line {line_num}: {str(e)}")
-                
+
                 output.program_memory_range.add(address + 1)
                 output.program_memory_range.add(address + 2)
                 address += 3
@@ -1049,16 +1234,16 @@ class Assembler8085:
             elif opcode in ["RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO"]:
                 # Conditional return opcodes mapping
                 ret_opcodes = {
-                    "RC": 0xD8,   # Return if carry
+                    "RC": 0xD8,  # Return if carry
                     "RNC": 0xD0,  # Return if no carry
-                    "RZ": 0xC8,   # Return if zero
+                    "RZ": 0xC8,  # Return if zero
                     "RNZ": 0xC0,  # Return if not zero
-                    "RP": 0xF0,   # Return if positive (S=0)
-                    "RM": 0xF8,   # Return if minus (S=1)
+                    "RP": 0xF0,  # Return if positive (S=0)
+                    "RM": 0xF8,  # Return if minus (S=1)
                     "RPE": 0xE8,  # Return if parity even
-                    "RPO": 0xE0   # Return if parity odd
+                    "RPO": 0xE0,  # Return if parity odd
                 }
-                
+
                 output.memory[address] = ret_opcodes[opcode]
                 address += 1
 
@@ -1066,10 +1251,12 @@ class Assembler8085:
                 # RST n opcodes: 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF for RST 0-7
                 # The number is 0-7 corresponding to 8 different restart addresses
                 rst_num = self._parse_number(tokens[1].strip(",;"))
-                
+
                 if rst_num < 0 or rst_num > 7:
-                    raise SyntaxError(f"Line {line_num}: RST requires a number from 0-7")
-                
+                    raise SyntaxError(
+                        f"Line {line_num}: RST requires a number from 0-7"
+                    )
+
                 # Calculate opcode: RST n = 11NNN111 where NNN is the 3-bit value of n
                 output.memory[address] = 0xC7 | (rst_num << 3)
                 address += 1
@@ -1078,7 +1265,7 @@ class Assembler8085:
                 reg = tokens[1].strip(",;")
                 if reg not in self.valid_registers:
                     raise SyntaxError(f"Line {line_num}: Invalid register '{reg}'")
-                
+
                 reg_code = self._get_reg_code(reg)
                 output.memory[address] = 0xB8 | reg_code
                 address += 1
@@ -1086,7 +1273,7 @@ class Assembler8085:
             elif opcode == "NOP":  # NOP (1 byte: opcode=0x00)
                 output.memory[address] = 0x00
                 address += 1
-        
+
         # Update program metadata after assembly
         if output.parsed_program:
             output.program_end_address = address
@@ -1106,18 +1293,18 @@ class Assembler8085:
     def _parse_number(self, value_str):
         """
         Parse a numeric literal in either decimal or hexadecimal format.
-        
+
         For hexadecimal, the format should be a number followed by 'H' (e.g., '3AH').
         For decimal, just the number is provided.
-        
+
         Returns the parsed number as an integer.
         """
         value_str = value_str.strip()
-        
+
         # Check for hexadecimal (suffix H)
-        if value_str.upper().endswith('H'):
+        if value_str.upper().endswith("H"):
             hex_str = value_str[:-1]
             return int(hex_str, 16)
-        
+
         # Otherwise, treat as decimal
         return int(value_str, 10)

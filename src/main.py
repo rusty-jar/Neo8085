@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Main module for Neo8085 - an 8085 microprocessor simulator 
+# Main module for Neo8085 - an 8085 microprocessor simulator
 # with integrated editor, assembler, and debugging capabilities
 
 # Standard library imports
@@ -23,18 +23,48 @@ import sys
 
 # Third-party imports
 from PySide6.QtCore import (
-    QDateTime, QElapsedTimer, QRect, QRegularExpression,
-    QSize, QTimer, Qt
+    QDateTime,
+    QElapsedTimer,
+    QRect,
+    QRegularExpression,
+    QSize,
+    QTimer,
+    Qt,
 )
 from PySide6.QtGui import (
-    QAction, QColor, QFont, QIcon, QKeySequence, QPainter,
-    QPixmap, QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextFormat
+    QAction,
+    QColor,
+    QFont,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QPixmap,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QTextCursor,
+    QTextFormat,
 )
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
-    QHeaderView, QLabel, QLineEdit, QMenu, QMenuBar, QMessageBox, 
-    QPlainTextEdit, QPushButton, QSplashScreen, QTableWidget, QTableWidgetItem,
-    QTextEdit, QVBoxLayout, QWidget
+    QApplication,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QMenuBar,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QSplashScreen,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
 # Local application imports
@@ -42,159 +72,242 @@ from assembler import Assembler8085
 from processor import Processor8085
 from version import __version__, version_string, display_version
 
+
 class LineNumberArea(QWidget):
     """Widget for displaying line numbers and breakpoints in code editor"""
+
     def __init__(self, editor):
         super().__init__(editor)
         self.editor = editor
         self.simulator = None
         self.setCursor(Qt.PointingHandCursor)
-        
+
     def sizeHint(self):
         return QSize(self.editor.lineNumberAreaWidth(), 0)
-    
+
     def paintEvent(self, event):
         self.editor.lineNumberAreaPaintEvent(event)
-    
+
     def set_simulator(self, simulator):
         """Store reference to simulator for logging capabilities"""
         self.simulator = simulator
-    
+
     def mousePressEvent(self, event):
         """Handle mouse clicks to toggle breakpoints on valid code lines"""
         # Calculate which line was clicked
         y_position = event.position().y()
         block = self.editor.firstVisibleBlock()
-        top = self.editor.blockBoundingGeometry(block).translated(self.editor.contentOffset()).top()
-        
+        top = (
+            self.editor.blockBoundingGeometry(block)
+            .translated(self.editor.contentOffset())
+            .top()
+        )
+
         # Find the text block (line) that was clicked
         while block.isValid():
             block_height = self.editor.blockBoundingRect(block).height()
             bottom = top + block_height
-            
+
             if top <= y_position <= bottom:
                 line_number = block.blockNumber()
                 # Validate line has actual code (not empty or comment-only)
-                block_text = self.editor.document().findBlockByNumber(line_number).text().strip()
-                if block_text and not block_text.startswith(';'):
+                block_text = (
+                    self.editor.document().findBlockByNumber(line_number).text().strip()
+                )
+                if block_text and not block_text.startswith(";"):
                     self.editor.toggleBreakpoint(line_number)
                 else:
                     if self.simulator:
-                        self.simulator.add_to_log("Cannot add breakpoint on empty line or comment-only line", "ERROR")
+                        self.simulator.add_to_log(
+                            "Cannot add breakpoint on empty line or comment-only line",
+                            "ERROR",
+                        )
                 break
-            
+
             block = block.next()
             top = bottom
 
 
 class AssemblyHighlighter(QSyntaxHighlighter):
     """Syntax highlighter for 8085 assembly language with customized color scheme"""
+
     def __init__(self, document):
         super().__init__(document)
-        
+
         self.highlighting_rules = []
-        
+
         # Format definitions with appropriate colors for code elements
         instruction_format = QTextCharFormat()
         instruction_format.setForeground(QColor("#8A2BE2"))  # Purple
         instruction_format.setFontWeight(QFont.Bold)
-        
+
         register_format = QTextCharFormat()
         register_format.setForeground(QColor("#2E8B57"))  # Sea Green
-        
+
         decimal_format = QTextCharFormat()
         decimal_format.setForeground(QColor("#0000FF"))  # Blue
-        
+
         hex_format = QTextCharFormat()
         hex_format.setForeground(QColor("#1E90FF"))  # Light Blue
-        
+
         comment_format = QTextCharFormat()
         comment_format.setForeground(QColor("#808080"))  # Gray
         comment_format.setFontItalic(True)
-        
+
         label_format = QTextCharFormat()
         label_format.setForeground(QColor("#800020"))  # Burgundy
-        
+
         directive_format = QTextCharFormat()
         directive_format.setForeground(QColor("#FF6600"))  # Orange
         directive_format.setFontWeight(QFont.Bold)
-        
+
         # 8085 instruction set
-        instructions = ["MVI", "MOV", "LXI", "LDA", "STA", "ADD", "ADI", "SUB", 
-                        "INR", "DCR", "JMP", "JZ", "JNZ", "JC", "JNC", "JP", 
-                        "JM", "JPE", "JPO", "HLT", "INX", "PUSH", "POP",
-                        "CALL", "RET", "CPI", "DAD", "XCHG",
-                        "LDAX", "STAX", "LHLD", "SHLD", "PCHL", "SPHL", "XTHL",
-                        "ANA", "ANI", "ORA", "ORI", "XRA", "XRI", "CMA", 
-                        "CMC", "STC", "RLC", "RRC", "RAL", "RAR",
-                        "ADC", "ACI", "SBB", "SBI", "DAA", "DCX",
-                        "CC", "CNC", "CZ", "CNZ", "CP", "CM", "CPE", "CPO",
-                        "RC", "RNC", "RZ", "RNZ", "RP", "RM", "RPE", "RPO",
-                        "RST", "CMP", "NOP"] 
+        instructions = [
+            "MVI",
+            "MOV",
+            "LXI",
+            "LDA",
+            "STA",
+            "ADD",
+            "ADI",
+            "SUB",
+            "INR",
+            "DCR",
+            "JMP",
+            "JZ",
+            "JNZ",
+            "JC",
+            "JNC",
+            "JP",
+            "JM",
+            "JPE",
+            "JPO",
+            "HLT",
+            "INX",
+            "PUSH",
+            "POP",
+            "CALL",
+            "RET",
+            "CPI",
+            "DAD",
+            "XCHG",
+            "LDAX",
+            "STAX",
+            "LHLD",
+            "SHLD",
+            "PCHL",
+            "SPHL",
+            "XTHL",
+            "ANA",
+            "ANI",
+            "ORA",
+            "ORI",
+            "XRA",
+            "XRI",
+            "CMA",
+            "CMC",
+            "STC",
+            "RLC",
+            "RRC",
+            "RAL",
+            "RAR",
+            "ADC",
+            "ACI",
+            "SBB",
+            "SBI",
+            "DAA",
+            "DCX",
+            "CC",
+            "CNC",
+            "CZ",
+            "CNZ",
+            "CP",
+            "CM",
+            "CPE",
+            "CPO",
+            "RC",
+            "RNC",
+            "RZ",
+            "RNZ",
+            "RP",
+            "RM",
+            "RPE",
+            "RPO",
+            "RST",
+            "CMP",
+            "NOP",
+        ]
 
         # Assembler directives
         directives = ["DS", "ORG", "END", "EQU"]
-        
+
         # Create highlighting rules for instructions
         for instruction in instructions:
-            pattern = QRegularExpression(f"\\b{instruction}\\b", 
-                                         QRegularExpression.CaseInsensitiveOption)
+            pattern = QRegularExpression(
+                f"\\b{instruction}\\b", QRegularExpression.CaseInsensitiveOption
+            )
             self.highlighting_rules.append((pattern, instruction_format))
-        
+
         # Create highlighting rules for directives
         for directive in directives:
-            pattern = QRegularExpression(f"\\b{directive}\\b", 
-                                        QRegularExpression.CaseInsensitiveOption)
+            pattern = QRegularExpression(
+                f"\\b{directive}\\b", QRegularExpression.CaseInsensitiveOption
+            )
             self.highlighting_rules.append((pattern, directive_format))
-        
+
         # Create highlighting rules for registers
         registers = ["A", "B", "C", "D", "E", "H", "L", "M", "SP", "PSW"]
-        
+
         for reg in registers:
-            pattern = QRegularExpression(f"\\b{reg}\\b", 
-                                        QRegularExpression.CaseInsensitiveOption)
+            pattern = QRegularExpression(
+                f"\\b{reg}\\b", QRegularExpression.CaseInsensitiveOption
+            )
             self.highlighting_rules.append((pattern, register_format))
-        
+
         # Highlighting rules for number formats
         hex_pattern = QRegularExpression("\\b[0-9A-Fa-f]+[Hh]\\b")
         self.highlighting_rules.append((hex_pattern, hex_format))
-        
+
         decimal_pattern = QRegularExpression("\\b[0-9]+\\b(?![Hh])")
         self.highlighting_rules.append((decimal_pattern, decimal_format))
-        
+
         # Highlighting rules for comments and labels
         comment_pattern = QRegularExpression(";.*")
         self.highlighting_rules.append((comment_pattern, comment_format))
-        
+
         label_pattern = QRegularExpression("\\b[A-Za-z_][A-Za-z0-9_]*:")
         self.highlighting_rules.append((label_pattern, label_format))
-    
+
     def highlightBlock(self, text):
         """Apply defined highlighting rules to each text block"""
         for pattern, format in self.highlighting_rules:
             match = pattern.globalMatch(text)
             while match.hasNext():
                 match_result = match.next()
-                self.setFormat(match_result.capturedStart(), match_result.capturedLength(), format)
+                self.setFormat(
+                    match_result.capturedStart(), match_result.capturedLength(), format
+                )
 
 
 class LineNumberedEditor(QPlainTextEdit):
     """Code editor with line numbers, syntax highlighting, and breakpoint support"""
+
     def __init__(self):
-        super().__init__() 
+        super().__init__()
         self.setPlaceholderText("Enter 8085 Assembly Code Here...")
         self.setFont(QFont("Consolas", 12))
-        
+
         self.container = QWidget()
         self.container_layout = QVBoxLayout(self.container)
         self.container_layout.setContentsMargins(0, 0, 0, 0)
         self.container_layout.setSpacing(0)
-        
+
         # Initialize syntax highlighter
         self.highlighter = AssemblyHighlighter(self.document())
-        
+
         # Light theme styling
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
         QPlainTextEdit {
             background-color: #FFFFFF;
             color: #1E1E1E;
@@ -223,92 +336,104 @@ class LineNumberedEditor(QPlainTextEdit):
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
             background: none;
         }
-        """)
-        
+        """
+        )
+
         # Status bar for cursor position display
         self.status_bar = QLabel("Ln 1, Col 1")
         self.status_bar.setFont(QFont("Segoe UI", 9))
-        self.status_bar.setStyleSheet("background-color: #FFFFFF; padding: 2px 5px; border: none; solid #DDDDDD;")
+        self.status_bar.setStyleSheet(
+            "background-color: #FFFFFF; padding: 2px 5px; border: none; solid #DDDDDD;"
+        )
         self.status_bar.setAlignment(Qt.AlignLeft)
         self.status_bar.setFixedHeight(20)
-        
+
         self.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.lineNumberArea = LineNumberArea(self)
         self.breakpoints = set()
-        
+
         # Connect signals for UI updates
         self.blockCountChanged.connect(self.updateLineNumberAreaWidth)
         self.updateRequest.connect(self.updateLineNumberArea)
         self.cursorPositionChanged.connect(self.updateCursorPosition)
         self.cursorPositionChanged.connect(self.highlightCurrentLine)
-        
+
         self.updateLineNumberAreaWidth(0)
         self.highlightCurrentLine()
         self.updateCursorPosition()
-    
+
     def updateCursorPosition(self):
         """Update status bar with current cursor position information"""
         cursor = self.textCursor()
         line = cursor.blockNumber() + 1
         col = cursor.columnNumber() + 1
         chars = len(self.toPlainText())
-        
+
         self.status_bar.setText(f"Ln {line}, Col {col}, Chars: {chars}")
-    
+
     def lineNumberAreaWidth(self):
         """Calculate required width for line number display area"""
         digits = len(str(self.blockCount())) + 1
-        return 15 + self.fontMetrics().horizontalAdvance('9') * digits
-    
+        return 15 + self.fontMetrics().horizontalAdvance("9") * digits
+
     def updateLineNumberAreaWidth(self, _):
         self.setViewportMargins(self.lineNumberAreaWidth(), 0, 0, 0)
-    
+
     def updateLineNumberArea(self, rect, dy):
         """Update line number area on scroll or text changes"""
         if dy:
             self.lineNumberArea.scroll(0, dy)
         else:
-            self.lineNumberArea.update(0, rect.y(), self.lineNumberArea.width(), rect.height())
+            self.lineNumberArea.update(
+                0, rect.y(), self.lineNumberArea.width(), rect.height()
+            )
         if rect.contains(self.viewport().rect()):
             self.updateLineNumberAreaWidth(0)
-    
+
     def resizeEvent(self, event):
         """Handle resize events to adjust line number area dimensions"""
         super().resizeEvent(event)
         rect = self.contentsRect()
-        self.lineNumberArea.setGeometry(QRect(rect.left(), rect.top(), self.lineNumberAreaWidth(), rect.height()))
-    
+        self.lineNumberArea.setGeometry(
+            QRect(rect.left(), rect.top(), self.lineNumberAreaWidth(), rect.height())
+        )
+
     def lineNumberAreaPaintEvent(self, event):
         """Render line numbers and breakpoint indicators in the line number area"""
         painter = QPainter(self.lineNumberArea)
         painter.fillRect(event.rect(), QColor("#F0F0F0"))
-        
+
         block = self.firstVisibleBlock()
         blockNumber = block.blockNumber()
         top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
         bottom = top + self.blockBoundingRect(block).height()
-        
+
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
                 number = str(blockNumber + 1)
                 painter.setPen(QColor("#6D6D6D"))
-                
+
                 # Draw breakpoint marker
                 if blockNumber in self.breakpoints:
                     painter.setPen(QColor("#DA0000"))
                     painter.setBrush(QColor("#DA0000"))
                     painter.drawEllipse(3, int(top) + 4, 8, 8)
                     painter.setPen(QColor("#6D6D6D"))
-                
-                painter.drawText(0, int(top), self.lineNumberArea.width() - 5, 
-                              int(self.fontMetrics().height()), 
-                              Qt.AlignRight, number)
-            
+
+                painter.drawText(
+                    0,
+                    int(top),
+                    self.lineNumberArea.width() - 5,
+                    int(self.fontMetrics().height()),
+                    Qt.AlignRight,
+                    number,
+                )
+
             block = block.next()
             top = bottom
             bottom = top + self.blockBoundingRect(block).height()
             blockNumber += 1
-    
+
     def highlightCurrentLine(self):
         """Highlight the line containing the cursor"""
         extraSelections = []
@@ -319,14 +444,14 @@ class LineNumberedEditor(QPlainTextEdit):
         selection.cursor.clearSelection()
         extraSelections.append(selection)
         self.setExtraSelections(extraSelections)
-    
+
     def highlightExecutedLine(self, line):
         """Highlight the currently executing line during simulation"""
         cursor = QTextCursor(self.document().findBlockByLineNumber(line))
-        
+
         # Temporarily disconnect to prevent interference
         self.cursorPositionChanged.disconnect(self.highlightCurrentLine)
-        
+
         # Create execution highlight with light purple background
         extraSelections = []
         selection = QTextEdit.ExtraSelection()
@@ -335,33 +460,34 @@ class LineNumberedEditor(QPlainTextEdit):
         selection.cursor = cursor
         selection.cursor.clearSelection()
         extraSelections.append(selection)
-        
+
         # Apply the highlight
         self.setExtraSelections(extraSelections)
-        
+
         # Ensure line is visible in the viewport
         self.setTextCursor(cursor)
         self.ensureCursorVisible()
-        
+
         # Force update to make the highlight visible immediately
         QApplication.processEvents()
-        
+
         # Reconnect signal
         self.cursorPositionChanged.connect(self.highlightCurrentLine)
-    
+
     def toggleBreakpoint(self, line):
         """Toggle breakpoint state for the specified line"""
         if line in self.breakpoints:
             self.breakpoints.remove(line)
         else:
             self.breakpoints.add(line)
-        
+
         # Refresh line number area display
         self.lineNumberArea.update()
 
 
 class Simulator(QWidget):
     """Main simulator application for the 8085 microprocessor"""
+
     def __init__(self):
         super().__init__()
         self.processor = Processor8085()
@@ -372,14 +498,14 @@ class Simulator(QWidget):
         self.follow_pc = False
         self.use_highlighting = True
         self.document_modified = False
-        
+
         # Performance tracking
         self.elapsed_timer = QElapsedTimer()
         self.elapsed_time_ms = 0
         self.timer_running = False
-        
+
         self.init_ui()
-    
+
     def start_elapsed_timer(self):
         """Start or resume execution timing"""
         if not self.timer_running:
@@ -402,10 +528,10 @@ class Simulator(QWidget):
     def update_elapsed_time_display(self):
         """Format and display elapsed execution time with appropriate units"""
         total_ms = self.elapsed_time_ms
-        
+
         if self.timer_running:
             total_ms += self.elapsed_timer.elapsed()
-        
+
         # Select appropriate time unit based on duration
         if total_ms < 1000:  # Less than 1 second
             time_str = f"{total_ms} ms"
@@ -415,22 +541,25 @@ class Simulator(QWidget):
             minutes = int(total_ms / 60000)
             seconds = (total_ms % 60000) / 1000
             time_str = f"{minutes}:{seconds:06.3f}"
-        
+
         self.exec_time_label.setText(f"Elapsed Time: {time_str}")
-    
+
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle(f"Neo8085 v{display_version} - 8085 Microprocessor Simulator")
+        self.setWindowTitle(
+            f"Neo8085 v{display_version} - 8085 Microprocessor Simulator"
+        )
         self.setGeometry(100, 50, 1280, 800)
-        
+
         # Main layout
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # Create menu bar
         self.menu_bar = QMenuBar(self)
-        self.menu_bar.setStyleSheet("""
+        self.menu_bar.setStyleSheet(
+            """
             QMenuBar {
                 font: 10pt "Segoe UI";
                 background-color: #FFFFFF;
@@ -446,8 +575,9 @@ class Simulator(QWidget):
             QMenuBar::item:selected {
                 background-color: #CBE3F8;
             }
-        """)
-        
+        """
+        )
+
         # File Menu
         file_menu = self.menu_bar.addMenu("File")
 
@@ -479,7 +609,7 @@ class Simulator(QWidget):
         exit_action.setShortcut("Alt+F4")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
-        
+
         # Run Menu
         run_menu = self.menu_bar.addMenu("Simulator")
 
@@ -513,7 +643,7 @@ class Simulator(QWidget):
         run_menu.addAction(run_fast_action)
         run_menu.addAction(stop_action)
         run_menu.addAction(reset_action)
-        
+
         # Debug Menu
         debug_menu = self.menu_bar.addMenu("Debug")
         add_bp_action = QAction("Add Breakpoint", self)
@@ -526,28 +656,29 @@ class Simulator(QWidget):
         debug_menu.addAction(add_bp_action)
         debug_menu.addAction(remove_bp_action)
         debug_menu.addAction(remove_all_bp_action)
-        
+
         # Help Menu
         help_menu = self.menu_bar.addMenu("Help")
         about_action = QAction("About", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
-        
+
         main_layout.addWidget(self.menu_bar)
-        
+
         # Content container
         content_container = QWidget()
         content_layout = QVBoxLayout(content_container)
         content_layout.setContentsMargins(0, 0, 5, 5)
-        
+
         # Main Content Layout
         main_content = QHBoxLayout()
-        
+
         # Left Panel - Code Editor and Execution Log
         left_panel = QVBoxLayout()
-        
+
         # Global styling
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QWidget {
                 background-color: #EDEDED;
                 color: #1E1E1E;
@@ -611,13 +742,14 @@ class Simulator(QWidget):
             QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
                 background: none;
             }
-        """)
-        
+        """
+        )
+
         self.code_editor = LineNumberedEditor()
-        
+
         # Connect line number area to simulator for error logging
         self.code_editor.lineNumberArea.set_simulator(self)
-        
+
         # Code editor layout with status bar
         editor_layout = QVBoxLayout()
         editor_layout.setContentsMargins(0, 0, 0, 0)
@@ -626,11 +758,13 @@ class Simulator(QWidget):
         editor_layout.addWidget(self.code_editor.status_bar)
 
         left_panel.addLayout(editor_layout, 4)
-        
+
         # Context menu for breakpoints
         self.code_editor.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.code_editor.customContextMenuRequested.connect(self.show_editor_context_menu)
-        
+        self.code_editor.customContextMenuRequested.connect(
+            self.show_editor_context_menu
+        )
+
         # Execution log and converter section
         log_converter_layout = QHBoxLayout()
 
@@ -641,7 +775,9 @@ class Simulator(QWidget):
 
         log_label = QLabel("Execution Log")
         log_label.setFont(QFont("Segoe UI", 12))
-        log_label.setStyleSheet("color: #FFFFFF; background-color: #5C2D91; padding: 5px; margin-left: 5px;")
+        log_label.setStyleSheet(
+            "color: #FFFFFF; background-color: #5C2D91; padding: 5px; margin-left: 5px;"
+        )
         log_layout.addWidget(log_label)
 
         # Execution log widget
@@ -649,7 +785,8 @@ class Simulator(QWidget):
         self.execution_log_widget.setReadOnly(True)
         self.execution_log_widget.setFont(QFont("Consolas", 10))
 
-        self.execution_log_widget.setStyleSheet("""
+        self.execution_log_widget.setStyleSheet(
+            """
             QTextEdit {
                 background-color: #FFFFFF; 
                 color: #1E1E1E; 
@@ -678,42 +815,46 @@ class Simulator(QWidget):
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
                 background: none;
             }
-        """)
+        """
+        )
 
         log_layout.addWidget(self.execution_log_widget, 1)
         log_converter_layout.addLayout(log_layout, 2)
 
         # Right side layout for converter and memory editor
         right_side_layout = QVBoxLayout()
-        
+
         # Number converter widget
         converter_widget = self.create_converter()
         right_side_layout.addWidget(converter_widget)
-        
+
         # Memory editor widget
         memory_editor_widget = self.create_memory_editor()
         right_side_layout.addWidget(memory_editor_widget)
-        
+
         log_converter_layout.addLayout(right_side_layout, 1)
         left_panel.addLayout(log_converter_layout, 2)
         main_content.addLayout(left_panel, 2)
-        
+
         # Right Panel - Registers, Flags, and Memory
         right_panel = QVBoxLayout()
-        
+
         # Simulator header
         simulator_header = QLabel("SIMULATOR OPERATIONS")
         simulator_header.setFixedHeight(30)
         simulator_header.setFont(QFont("Segoe UI", 12))
-        simulator_header.setStyleSheet("min-height: 30px; background-color: #5C2D91; color: white; border: none; margin-top: 5px;")
+        simulator_header.setStyleSheet(
+            "min-height: 30px; background-color: #5C2D91; color: white; border: none; margin-top: 5px;"
+        )
         simulator_header.setAlignment(Qt.AlignCenter)
         right_panel.addWidget(simulator_header)
-        
+
         # Control buttons
         control_layout = QHBoxLayout()
-        
+
         self.compile_button = QPushButton("Assemble")
-        self.compile_button.setStyleSheet("""
+        self.compile_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #458ADB; 
                 color: #FFFFFF; 
@@ -723,11 +864,13 @@ class Simulator(QWidget):
             QPushButton:hover {
                 background-color: #3A75C4;
             }
-        """)
+        """
+        )
         self.compile_button.clicked.connect(self.compile_program)
 
         self.step_button = QPushButton("Step")
-        self.step_button.setStyleSheet("""
+        self.step_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #B8A404; 
                 color: white; 
@@ -737,11 +880,13 @@ class Simulator(QWidget):
             QPushButton:hover {
                 background-color: #9E8C03;
             }
-        """)
+        """
+        )
         self.step_button.clicked.connect(self.execute_single_step)
 
         self.run_button = QPushButton("Run")
-        self.run_button.setStyleSheet("""
+        self.run_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #0DB000; 
                 color: white; 
@@ -751,11 +896,13 @@ class Simulator(QWidget):
             QPushButton:hover {
                 background-color: #0A9000;
             }
-        """)
+        """
+        )
         self.run_button.clicked.connect(self.start_continuous_execution)
 
         self.stop_button = QPushButton("Stop")
-        self.stop_button.setStyleSheet("""
+        self.stop_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #C42B1C; 
                 color: white; 
@@ -765,12 +912,14 @@ class Simulator(QWidget):
             QPushButton:hover {
                 background-color: #A82318;
             }
-        """)
+        """
+        )
         self.stop_button.clicked.connect(self.stop_execution)
         self.stop_button.setEnabled(False)
 
         self.reset_button = QPushButton("Reset")
-        self.reset_button.setStyleSheet("""
+        self.reset_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #FFFFFF; 
                 color: #1E1E1E; 
@@ -781,51 +930,56 @@ class Simulator(QWidget):
                 background-color: #F0F0F0;
                 border: 2px solid #BBBBBB;
             }
-        """)
+        """
+        )
         self.reset_button.clicked.connect(self.reset_simulation)
-        
+
         control_layout.addWidget(self.compile_button)
         control_layout.addWidget(self.step_button)
         control_layout.addWidget(self.run_button)
         control_layout.addWidget(self.stop_button)
         control_layout.addWidget(self.reset_button)
-        
+
         right_panel.addLayout(control_layout)
-        
+
         # Status display
         self.status_label = QLabel("Ready")
         self.status_label.setFont(QFont("Segoe UI", 10))
-        self.status_label.setStyleSheet("background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;")
+        self.status_label.setStyleSheet(
+            "background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;"
+        )
         self.status_label.setAlignment(Qt.AlignCenter)
         self.set_status("Ready", "normal")
         right_panel.addWidget(self.status_label)
-        
+
         # Separator
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setStyleSheet("background-color: #555;")
         right_panel.addWidget(separator)
-        
+
         # Registers and Flags display
         registers_layout = QHBoxLayout()
-        
+
         self.register_labels = {}
         self.flag_labels = {}
-        
+
         self.registers_grid = QGridLayout()
         self.flags_grid = QGridLayout()
-        
+
         # Registers header
         register_header = QLabel("REGISTERS")
         register_header.setFixedHeight(40)
         register_header.setFont(QFont("Segoe UI", 12))
-        register_header.setStyleSheet("background-color: #5C2D91; color: white; border: none;")
+        register_header.setStyleSheet(
+            "background-color: #5C2D91; color: white; border: none;"
+        )
         register_header.setAlignment(Qt.AlignCenter)
         self.registers_grid.addWidget(register_header, 0, 0, 1, 2)
-    
+
         # A Register - Full Width
         self.add_register("A", 1, 0, 1, 2)
-        
+
         # B, C, D, E, H, L Registers - Two Columns
         self.add_register("B", 2, 0)
         self.add_register("C", 2, 1)
@@ -833,59 +987,68 @@ class Simulator(QWidget):
         self.add_register("E", 3, 1)
         self.add_register("H", 4, 0)
         self.add_register("L", 4, 1)
-        
+
         # SP, PC and PSW Registers - Full Width
         self.add_register("SP", 5, 0, 1, 2)
         self.add_register("PC", 6, 0, 1, 2)
         self.add_register("PSW", 7, 0, 1, 2)
-        
+
         # Flags Header
         flag_header = QLabel("FLAGS")
         flag_header.setFixedHeight(40)
         flag_header.setFont(QFont("Segoe UI", 12))
-        flag_header.setStyleSheet("background-color: #5C2D91; color: white; border: none;")
+        flag_header.setStyleSheet(
+            "background-color: #5C2D91; color: white; border: none;"
+        )
         flag_header.setAlignment(Qt.AlignCenter)
         self.flags_grid.addWidget(flag_header, 0, 0, 1, 1)
-        
+
         # Flags
         self.add_flag("S", 1)
         self.add_flag("Z", 2)
         self.add_flag("AC", 3)
         self.add_flag("P", 4)
         self.add_flag("C", 5)
-        
+
         registers_layout.addLayout(self.registers_grid, 3)
         registers_layout.addLayout(self.flags_grid, 1)
         right_panel.addLayout(registers_layout)
-        
+
         # Separator
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setStyleSheet("background-color: #555;")
         right_panel.addWidget(separator)
-        
+
         # Memory View
         memory_header = QLabel("MEMORY")
         memory_header.setFixedHeight(30)
         memory_header.setFont(QFont("Segoe UI", 12))
-        memory_header.setStyleSheet("background-color: #5C2D91; color: white; border: none;")
+        memory_header.setStyleSheet(
+            "background-color: #5C2D91; color: white; border: none;"
+        )
         memory_header.setAlignment(Qt.AlignCenter)
         right_panel.addWidget(memory_header)
-        
+
         # Memory Search Bar
         memory_search_layout = QHBoxLayout()
-        
+
         self.memory_search = QLineEdit()
-        self.memory_search.setPlaceholderText("Enter memory address (e.g., 8000, 2000H)")
-        self.memory_search.setStyleSheet("background-color: #FFFFFF; color: #1E1E1E; border: 1px solid #DDDDDD; padding: 5px;")
+        self.memory_search.setPlaceholderText(
+            "Enter memory address (e.g., 8000, 2000H)"
+        )
+        self.memory_search.setStyleSheet(
+            "background-color: #FFFFFF; color: #1E1E1E; border: 1px solid #DDDDDD; padding: 5px;"
+        )
         self.memory_search.returnPressed.connect(self.load_memory_address)
         self.memory_search.textChanged.connect(self.validate_memory_address)
-        self.memory_search.setValidator(None) 
+        self.memory_search.setValidator(None)
         memory_search_layout.addWidget(self.memory_search, 4)
-        
+
         # Add Enter button
         self.memory_enter_button = QPushButton("Enter")
-        self.memory_enter_button.setStyleSheet("""
+        self.memory_enter_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #FFFFFF;
                 color: #1E1E1E;
@@ -896,14 +1059,16 @@ class Simulator(QWidget):
                 background-color: #E6F2FF;
                 border: 1px solid #BBBBBB;
             }
-        """)
+        """
+        )
         self.memory_enter_button.clicked.connect(self.load_memory_address)
         memory_search_layout.addWidget(self.memory_enter_button, 1)
-        
+
         self.follow_pc_button = QPushButton("Follow PC")
         self.follow_pc_button.setCheckable(True)
         self.follow_pc_button.setChecked(False)
-        self.follow_pc_button.setStyleSheet("""
+        self.follow_pc_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #FFFFFF;
                 color: #1E1E1E;
@@ -918,16 +1083,20 @@ class Simulator(QWidget):
                 background-color: #E6F2FF;
                 border: 1px solid #BBBBBB;
             }
-        """)
+        """
+        )
         self.follow_pc_button.clicked.connect(self.toggle_follow_pc)
         memory_search_layout.addWidget(self.follow_pc_button, 1)
-        
+
         right_panel.addLayout(memory_search_layout)
-        
+
         # Memory Table
-        self.memory_table = QTableWidget(16, 18)  # 16 rows, 18 columns (decimal+hex address + 16 bytes)
+        self.memory_table = QTableWidget(
+            16, 18
+        )  # 16 rows, 18 columns (decimal+hex address + 16 bytes)
         self.memory_table.setFont(QFont("Consolas", 10))
-        self.memory_table.setStyleSheet("""
+        self.memory_table.setStyleSheet(
+            """
             QTableWidget {
             background-color: #FFFFFF;
             border: 1px solid #DDDDDD;
@@ -947,63 +1116,75 @@ class Simulator(QWidget):
         QTableWidget::item:selected {
             background-color: #CBE3F8;
         }
-        """)
-        
+        """
+        )
+
         self.memory_table.horizontalHeader().setDefaultSectionSize(45)
         # Set decimal address column to resize to contents
-        self.memory_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.memory_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeToContents
+        )
         # Set hex address column to be wider
-        self.memory_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.memory_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeToContents
+        )
         # Alternatively, set a fixed width that's wider than default:
         self.memory_table.setColumnWidth(1, 80)  # Make hex address column 80px wide
         self.memory_table.verticalHeader().setDefaultSectionSize(28)
-        
+
         # Set up memory table headers
         self.memory_table.setHorizontalHeaderItem(0, QTableWidgetItem("Dec"))
         self.memory_table.setHorizontalHeaderItem(1, QTableWidgetItem("Hex"))
         for i in range(16):
-            self.memory_table.setHorizontalHeaderItem(i+2, QTableWidgetItem(f"+{i:X}"))
-            
+            self.memory_table.setHorizontalHeaderItem(
+                i + 2, QTableWidgetItem(f"+{i:X}")
+            )
+
         self.memory_table.horizontalHeader().setStretchLastSection(True)
         self.memory_table.verticalHeader().setVisible(False)
         self.memory_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        
+
         right_panel.addWidget(self.memory_table)
-        
+
         # Execution Statistics
         stats_layout = QHBoxLayout()
-        
+
         self.instr_count_label = QLabel("Instructions: 0")
         self.instr_count_label.setFont(QFont("Segoe UI", 10))
-        self.instr_count_label.setStyleSheet("background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;")
-        
+        self.instr_count_label.setStyleSheet(
+            "background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;"
+        )
+
         self.exec_time_label = QLabel("Elapsed Time: 0 ms")
-        self.exec_time_label.setFont(QFont("Segoe UI", 10)) 
-        self.exec_time_label.setStyleSheet("background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;")
-        
+        self.exec_time_label.setFont(QFont("Segoe UI", 10))
+        self.exec_time_label.setStyleSheet(
+            "background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;"
+        )
+
         stats_layout.addWidget(self.instr_count_label)
         stats_layout.addWidget(self.exec_time_label)
-        
+
         right_panel.addLayout(stats_layout)
-        
+
         # Add right panel to main content
         main_content.addLayout(right_panel, 1)  # Right panel gets less horizontal space
-        
+
         content_layout.addLayout(main_content)
         main_layout.addWidget(content_container)
-        
+
         # Set up the main layout
         self.setLayout(main_layout)
-        
+
         # Set up execution timer
         self.execution_timer = QTimer()
         self.execution_timer.timeout.connect(self.execute_single_step)
-        
+
         # Initialize memory view
         self.load_memory_display(0x0000)
-        
+
         # Set code editor with sample program
-        self.code_editor.setPlainText(rf"""; +===================================================================+
+        self.code_editor.setPlainText(
+            rf"""; +===================================================================+
 ;     _   __           ____  ____  ____  ______
 ;    / | / /__  ____  ( __ )/ __ \( __ )/ ____/
 ;   /  |/ / _ \/ __ \/ __  / / / / __  /___ \  
@@ -1102,17 +1283,20 @@ END_OF_PROGRAM:
 
 END
 
-""")
-        
+"""
+        )
+
         # Connect to the textChanged signal of the code editor
         self.code_editor.textChanged.connect(self.document_was_modified)
-    
+
     def add_register(self, name, row, col, rowspan=1, colspan=1):
         """Add a register display to the UI"""
         value = "00H" if name not in ["SP", "PC", "PSW"] else "0000H"
         label = QLabel(f"{name}: {value}")
         label.setFont(QFont("Consolas", 12))
-        label.setStyleSheet("background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;")
+        label.setStyleSheet(
+            "background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;"
+        )
         label.setAlignment(Qt.AlignCenter)
         self.registers_grid.addWidget(label, row, col, rowspan, colspan)
         self.register_labels[name] = label
@@ -1121,11 +1305,13 @@ END
         """Add a flag display to the UI"""
         label = QLabel(f"{name}: 0")
         label.setFont(QFont("Consolas", 12))
-        label.setStyleSheet("background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;")
+        label.setStyleSheet(
+            "background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;"
+        )
         label.setAlignment(Qt.AlignCenter)
         self.flags_grid.addWidget(label, row, 0)
         self.flag_labels[name] = label
-    
+
     def update_registers_display(self):
         """Update register display from processor state"""
         for reg, value in self.processor.registers.items():
@@ -1136,12 +1322,12 @@ END
                 else:
                     hex_value = f"{value:02X}H"
                 self.register_labels[reg].setText(f"{reg}: {hex_value}")
-        
+
         # Update PSW display - combining A register and flags
         if "PSW" in self.register_labels:
             psw_value = self.processor.get_psw()
             self.register_labels["PSW"].setText(f"PSW: {psw_value:04X}H")
-    
+
     def update_flags_display(self):
         """Update flags display from processor state"""
         for flag, value in self.processor.flags.items():
@@ -1151,34 +1337,39 @@ END
     def start_fast_execution(self):
         """Start continuous execution mode without code highlighting for better performance"""
         # Assemble if not already done
-        if not hasattr(self.processor, 'parsed_program') or not self.processor.parsed_program:
+        if (
+            not hasattr(self.processor, "parsed_program")
+            or not self.processor.parsed_program
+        ):
             if not self.compile_program():
                 return
-        
+
         # Check if processor is already halted
         if self.processor.halted:
-            self.add_to_log("Cannot run - program has halted. Reset or assemble again.", "SYSTEM")
+            self.add_to_log(
+                "Cannot run - program has halted. Reset or assemble again.", "SYSTEM"
+            )
             self.set_status("Program halted - Reset to run again", "warning")
             return
-        
+
         # Set the highlighting flag to False for faster execution
         self.use_highlighting = False
-        
+
         # Start elapsed timer
         self.start_elapsed_timer()
-        
+
         # Continue with normal execution if not halted
         self.running = True
         self.execution_timer.start(10)  # Execute faster - every 10ms instead of 50ms
-        
+
         # Update UI state
         self.compile_button.setEnabled(False)
         self.step_button.setEnabled(False)
         self.run_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        
+
         self.set_status("Running (fast mode)...", "success")
-        
+
         self.add_to_log("Fast execution started (no highlighting)", "SYSTEM")
 
     def parse_address(self, addr_text):
@@ -1188,7 +1379,7 @@ END
         Returns the parsed integer address.
         """
         addr_text = addr_text.strip()
-        if addr_text.upper().endswith('H'):
+        if addr_text.upper().endswith("H"):
             # Hex address
             try:
                 return int(addr_text[:-1], 16)
@@ -1205,28 +1396,34 @@ END
         """Load memory view starting at base_addr"""
         # Address is aligned to 16-byte boundary
         base_addr = base_addr & 0xFFF0
-        
+
         for row in range(16):
             row_addr = base_addr + (row * 16)
             # Set decimal address
             self.memory_table.setItem(row, 0, QTableWidgetItem(f"{row_addr}"))
             # Set hex address
             self.memory_table.setItem(row, 1, QTableWidgetItem(f"{row_addr:04X}H"))
-            
+
             for col in range(16):
                 addr = row_addr + col
-                value = self.processor.memory[addr] if hasattr(self.processor, 'memory') else 0
-                self.memory_table.setItem(row, col+2, QTableWidgetItem(f"{value:02X}"))
+                value = (
+                    self.processor.memory[addr]
+                    if hasattr(self.processor, "memory")
+                    else 0
+                )
+                self.memory_table.setItem(
+                    row, col + 2, QTableWidgetItem(f"{value:02X}")
+                )
 
     def load_memory_address(self):
         """Jump to a specific memory address in the memory view"""
         addr_text = self.memory_search.text().strip()
         if not addr_text:
             return
-            
+
         try:
             base_addr = self.parse_address(addr_text)
-            
+
             # Ensure address is within valid memory range
             if base_addr < 0:
                 base_addr = 0
@@ -1234,35 +1431,39 @@ END
             elif base_addr > 0xFFFF:
                 base_addr = 0xFFFF
                 self.add_to_log("Address adjusted to maximum (65535/FFFFH)", "SYSTEM")
-                
+
             # If address is near the end of memory, adjust to show last complete page
             if base_addr > 0xFF00:  # 65280 decimal
                 base_addr = 0xFF00  # Start the view from the last page
-                self.add_to_log("Address adjusted to show last memory page (65280/FF00H)", "SYSTEM")
-            
+                self.add_to_log(
+                    "Address adjusted to show last memory page (65280/FF00H)", "SYSTEM"
+                )
+
             self.user_memory_addr = base_addr  # Store user's preference
-            self.follow_pc = False  # User has requested specific view, stop following PC
+            self.follow_pc = (
+                False  # User has requested specific view, stop following PC
+            )
             self.follow_pc_button.setChecked(False)
             self.load_memory_display(base_addr)
-            
+
             # Show the format of the address that was interpreted
-            if addr_text.upper().endswith('H'):
+            if addr_text.upper().endswith("H"):
                 self.add_to_log(f"Viewing memory at {base_addr:04X}H (hex)", "SYSTEM")
             else:
                 self.add_to_log(f"Viewing memory at {base_addr} (decimal)", "SYSTEM")
-                
+
         except ValueError as e:
             self.memory_search.setText("Invalid Address")
             self.memory_search.selectAll()
             self.add_to_log(f"Error: {str(e)}", "ERROR")
-    
+
     def validate_memory_address(self, text):
         """Validate memory address input as user types"""
         if not text:
             return
-            
+
         # Check if it's a decimal number or hex (with H/h suffix)
-        if text.upper().endswith('H'):
+        if text.upper().endswith("H"):
             # Handle hex input
             hex_val = text[:-1]
             try:
@@ -1285,115 +1486,123 @@ END
     def compile_program(self):
         """Compile the assembly code with syntax checking"""
         code = self.code_editor.toPlainText().splitlines()
-        
+
         try:
             # Use the assembler to parse the code
             assembler = Assembler8085()
             assembly_output = assembler.assemble(code)
-            
+
             # Load the assembled program into the processor
             self.processor = Processor8085()
             self.processor.load_program(assembly_output)
-            
+
             # Update UI
             self.update_registers_display()
             self.update_flags_display()
             self.load_memory_display(0x0000)
-            
+
             self.add_to_log("Program assembled successfully", "SYSTEM")
             self.add_to_log("Machine code loaded into memory", "SYSTEM")
             self.set_status("Assembled - Ready to Execute", "success")
-            
+
             # Reset execution statistics and timer
             self.execution_count = 0
             self.instr_count_label.setText("Instructions: 0")
             self.reset_elapsed_timer()
-            
+
             return True
-            
+
         except SyntaxError as e:
             # Handle syntax errors with detailed messages
             error_msg = str(e)
             self.add_to_log(f"Assembly error: {error_msg}", "ERROR")
             self.set_status(f"Assembly Failed: Syntax Error", "error")
-            
+
             # Show error message box with details
-            QMessageBox.critical(
-                self,
-                "Assembly Error",
-                error_msg
-            )
+            QMessageBox.critical(self, "Assembly Error", error_msg)
             return False
-            
+
         except Exception as e:
             # Handle other unexpected errors
             self.add_to_log(f"Assembly error: {str(e)}", "ERROR")
             self.set_status("Assembly Failed: Unknown Error", "error")
-            
+
             # Show error message box
             QMessageBox.critical(
-                self,
-                "Assembly Error",
-                f"An unexpected error occurred:\n{str(e)}"
+                self, "Assembly Error", f"An unexpected error occurred:\n{str(e)}"
             )
             return False
-    
+
     def execute_single_step(self):
         """Execute a single instruction"""
         # Make sure we have an assembled program
-        if not hasattr(self.processor, 'parsed_program') or not self.processor.parsed_program:
+        if (
+            not hasattr(self.processor, "parsed_program")
+            or not self.processor.parsed_program
+        ):
             if not self.compile_program():
                 return
-        
+
         # Start timing for this step
         self.start_elapsed_timer()
-        
+
         # Return immediately if processor is already halted
         if self.processor.halted:
             # Make sure execution is fully stopped if we're in continuous mode
-            if hasattr(self, 'running') and self.running:
+            if hasattr(self, "running") and self.running:
                 self.stop_execution()
             return "HALT"
-        
+
         # Get current PC and find corresponding line
         pc = self.processor.registers["PC"]
         line_num = self.processor.address_to_line_map.get(pc)
-        
+
         # Check for breakpoints when running continuously
-        if hasattr(self, 'running') and self.running and line_num is not None and (line_num - 1) in self.code_editor.breakpoints:
+        if (
+            hasattr(self, "running")
+            and self.running
+            and line_num is not None
+            and (line_num - 1) in self.code_editor.breakpoints
+        ):
             self.add_to_log(f"Breakpoint hit at line {line_num}", "SYSTEM")
             self.stop_execution()
             # Always highlight on breakpoint hit, even in fast mode
-            self.code_editor.highlightExecutedLine(line_num - 1)  # Convert to 0-indexed for highlighting
+            self.code_editor.highlightExecutedLine(
+                line_num - 1
+            )  # Convert to 0-indexed for highlighting
             return
-        
+
         # Highlight the current line before executing (only if highlighting is enabled)
         if self.use_highlighting and line_num is not None:
-            self.code_editor.highlightExecutedLine(line_num - 1)  # Convert to 0-indexed for highlighting
-        
+            self.code_editor.highlightExecutedLine(
+                line_num - 1
+            )  # Convert to 0-indexed for highlighting
+
         # Execute one instruction
         result = self.processor.step()
-        
+
         # Update execution count
         self.execution_count += 1
         self.instr_count_label.setText(f"Instructions: {self.execution_count}")
-        
+
         # Update elapsed time display
         self.update_elapsed_time_display()
-        
+
         # When running in single-step mode, stop the timer after each step
-        if not hasattr(self, 'running') or not self.running:
+        if not hasattr(self, "running") or not self.running:
             self.stop_elapsed_timer()
-        
+
         # Log the instruction that was executed - only in normal mode or for important events
-        if self.processor.last_instruction and (self.use_highlighting or result != "OK"):
+        if self.processor.last_instruction and (
+            self.use_highlighting or result != "OK"
+        ):
             self.add_to_log(f"{pc:04X}: {self.processor.last_instruction}", result)
-        
+
         # Update UI components
         self.update_registers_display()
         self.update_flags_display()
         self.update_memory_view()
-        
+
         # Check execution status
         if result == "HALT":
             self.set_status("Program halted", "warning")
@@ -1402,68 +1611,72 @@ END
         elif result == "ERROR":
             self.set_status(f"Error: {self.processor.error}", "error")
             self.stop_execution()
-        
+
         return result
-    
+
     def start_continuous_execution(self):
         """Start continuous execution mode"""
         # Assemble if not already done
-        if not hasattr(self.processor, 'parsed_program') or not self.processor.parsed_program:
+        if (
+            not hasattr(self.processor, "parsed_program")
+            or not self.processor.parsed_program
+        ):
             if not self.compile_program():
                 return
-        
+
         # Check if processor is already halted
         if self.processor.halted:
-            self.add_to_log("Cannot run - program has halted. Reset or assemble again.", "SYSTEM")
+            self.add_to_log(
+                "Cannot run - program has halted. Reset or assemble again.", "SYSTEM"
+            )
             self.set_status("Program halted - Reset to run again", "warning")
             return
-        
+
         # Set the highlighting flag to True for normal execution
         self.use_highlighting = True
-        
+
         # Start elapsed timer
         self.start_elapsed_timer()
-        
+
         # Continue with normal execution if not halted
         self.running = True
         self.execution_timer.start(50)  # Execute every 50ms
-        
+
         # Update UI state
         self.compile_button.setEnabled(False)
         self.step_button.setEnabled(False)
         self.run_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        
+
         self.set_status("Running...", "success")
-        
+
         self.add_to_log("Continuous execution started", "SYSTEM")
 
-    
     def stop_execution(self):
         """Stop continuous execution"""
         self.running = False
         self.execution_timer.stop()
-        
+
         # Stop elapsed timer
         self.stop_elapsed_timer()
-        
+
         # Reset to default highlighting mode
         self.use_highlighting = True
-        
+
         # Update UI state
         self.compile_button.setEnabled(True)
         self.step_button.setEnabled(True)
         self.run_button.setEnabled(True)
         self.stop_button.setEnabled(False)
-        
+
         if not self.processor.halted and not self.processor.error:
             self.set_status("Execution Paused", "warning")
             self.add_to_log("Execution paused", "SYSTEM")
-    
+
     def update_memory_view(self):
         """Update memory view based on current state"""
         pc = self.processor.registers["PC"]
-        
+
         # Only change memory view base address if we're in follow-PC mode
         if self.follow_pc:
             # Align to 16-byte boundary and show memory chunk containing PC
@@ -1472,56 +1685,62 @@ END
         else:
             # Just update the values without changing the view location
             self.update_memory_values()
-    
+
     def update_memory_values(self):
         """Update memory values without changing the current view"""
         try:
             # Get the base address from the hex address column (column 1)
             base_addr_text = self.memory_table.item(0, 1).text()
-            
+
             # Parse the hex address (remove the 'H' suffix if present)
-            if base_addr_text.upper().endswith('H'):
+            if base_addr_text.upper().endswith("H"):
                 base_addr = int(base_addr_text[:-1], 16)
             else:
                 base_addr = int(base_addr_text, 16)
-            
+
             # Update only the memory values (columns 2-17), not the address columns
             for row in range(16):
                 row_addr = base_addr + (row * 16)
-                
+
                 for col in range(16):
                     addr = row_addr + col
                     value = self.processor.memory[addr]
                     # Update memory value column (col+2 since columns 0,1 are addresses)
-                    self.memory_table.item(row, col+2).setText(f"{value:02X}")
+                    self.memory_table.item(row, col + 2).setText(f"{value:02X}")
         except (ValueError, AttributeError) as e:
             # Handle case where table might not be fully initialized yet
             self.add_to_log(f"Memory view update error: {str(e)}", "ERROR")
-    
+
     def add_breakpoint(self):
         """Add breakpoint at the current line if not empty"""
         cursor = self.code_editor.textCursor()
         line_num = cursor.blockNumber()
-        
+
         # Check if line is not empty
-        block_text = self.code_editor.document().findBlockByNumber(line_num).text().strip()
-        if block_text and not block_text.startswith(';'):
+        block_text = (
+            self.code_editor.document().findBlockByNumber(line_num).text().strip()
+        )
+        if block_text and not block_text.startswith(";"):
             # Check if breakpoint already exists at this line
             if line_num in self.code_editor.breakpoints:
                 # Inform that breakpoint already exists
-                self.add_to_log(f"Breakpoint already exists at line {line_num + 1}", "SYSTEM")
+                self.add_to_log(
+                    f"Breakpoint already exists at line {line_num + 1}", "SYSTEM"
+                )
             else:
                 # Add breakpoint
                 self.code_editor.toggleBreakpoint(line_num)
                 self.add_to_log(f"Breakpoint added at line {line_num + 1}", "SYSTEM")
         else:
-            self.add_to_log("Cannot add breakpoint on empty line or comment-only line", "ERROR")
+            self.add_to_log(
+                "Cannot add breakpoint on empty line or comment-only line", "ERROR"
+            )
 
     def remove_breakpoint(self):
         """Remove breakpoint from the current line if one exists"""
         cursor = self.code_editor.textCursor()
         line_num = cursor.blockNumber()
-        
+
         if line_num in self.code_editor.breakpoints:
             self.code_editor.toggleBreakpoint(line_num)
             self.add_to_log(f"Breakpoint removed from line {line_num + 1}", "SYSTEM")
@@ -1536,55 +1755,61 @@ END
             self.add_to_log("All breakpoints removed", "SYSTEM")
         else:
             self.add_to_log("No breakpoints to remove", "SYSTEM")
-    
+
     def add_to_log(self, message, status="OK"):
         """Add a message to the execution log"""
         timestamp = QDateTime.currentDateTime().toString("hh:mm:ss")
-        
+
         # Set color based on status
         status_color = {
-            "OK": "#00AA00",     # Green
-            "HALT": "#AAAA00",   # Yellow
+            "OK": "#00AA00",  # Green
+            "HALT": "#AAAA00",  # Yellow
             "ERROR": "#AA0000",  # Red
-            "SYSTEM": "#00AAAA"  # Cyan
+            "SYSTEM": "#00AAAA",  # Cyan
         }.get(status, "#FFFFFF")
-        
+
         # Format the log entry with HTML
         log_entry = f"<span style='color:{status_color}'>[{timestamp}] {message}</span>"
-        
+
         # Add to the log and update display
         self.execution_log.append(log_entry)
-        self.execution_log_widget.setHtml("<br>".join(self.execution_log[-100:]))  # Show last 100 entries
-        
+        self.execution_log_widget.setHtml(
+            "<br>".join(self.execution_log[-100:])
+        )  # Show last 100 entries
+
         # Scroll to the bottom
         self.execution_log_widget.verticalScrollBar().setValue(
             self.execution_log_widget.verticalScrollBar().maximum()
         )
-    
+
     def show_editor_context_menu(self, pos):
         """Show context menu for the code editor"""
         cursor = self.code_editor.cursorForPosition(pos)
         line_num = cursor.blockNumber()
-        
+
         menu = QMenu(self)
-        
+
         if line_num in self.code_editor.breakpoints:
             action = menu.addAction("Remove Breakpoint")
         else:
             action = menu.addAction("Add Breakpoint")
-        
+
         action.triggered.connect(lambda: self.toggle_breakpoint(line_num))
         menu.exec(self.code_editor.viewport().mapToGlobal(pos))
-    
+
     def toggle_breakpoint(self, line_num):
         """Toggle breakpoint at the specified line"""
         # Check if line is not empty
-        block_text = self.code_editor.document().findBlockByNumber(line_num).text().strip()
-        if block_text and not block_text.startswith(';'):
+        block_text = (
+            self.code_editor.document().findBlockByNumber(line_num).text().strip()
+        )
+        if block_text and not block_text.startswith(";"):
             self.code_editor.toggleBreakpoint(line_num)
         else:
-            self.add_to_log("Cannot add breakpoint on empty line or comment-only line", "ERROR")
-    
+            self.add_to_log(
+                "Cannot add breakpoint on empty line or comment-only line", "ERROR"
+            )
+
     def save_program(self):
         """Save the current program to the current file or prompt for location"""
         if self.current_file:
@@ -1595,14 +1820,11 @@ END
     def save_program_as(self):
         """Save the program to a new file"""
         from PySide6.QtWidgets import QFileDialog
-        
+
         file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Assembly Program",
-            "",
-            "Assembly Files (*.asm);;All Files (*.*)"
+            self, "Save Assembly Program", "", "Assembly Files (*.asm);;All Files (*.*)"
         )
-        
+
         if file_path:
             return self.save_to_file(file_path)
         return True  # User canceled
@@ -1612,7 +1834,7 @@ END
         try:
             with open(file_path, "w") as f:
                 f.write(self.code_editor.toPlainText())
-            
+
             self.current_file = file_path
             self.document_modified = False  # Reset modified flag after saving
             self.update_window_title()
@@ -1621,9 +1843,7 @@ END
         except Exception as e:
             self.add_to_log(f"Error saving program: {str(e)}", "ERROR")
             QMessageBox.critical(
-                self, 
-                "Save Error",
-                f"Could not save the file:\n{str(e)}"
+                self, "Save Error", f"Could not save the file:\n{str(e)}"
             )
             return True  # Error occurred
 
@@ -1632,36 +1852,31 @@ END
         # Check if we need to save current work
         if self.check_save_current():
             return
-        
+
         from PySide6.QtWidgets import QFileDialog
-        
+
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Open Assembly Program",
-            "",
-            "Assembly Files (*.asm);;All Files (*.*)"
+            self, "Open Assembly Program", "", "Assembly Files (*.asm);;All Files (*.*)"
         )
-        
+
         if file_path:
             try:
                 with open(file_path, "r") as f:
                     content = f.read()
-                    
+
                 self.code_editor.setPlainText(content)
                 self.current_file = file_path
                 self.document_modified = False  # Reset modified flag after loading
                 self.update_window_title()
                 self.add_to_log(f"Program loaded from {file_path}", "SYSTEM")
-                
+
                 # Reset simulation when loading a new file
                 self.reset_simulation()
-                
+
             except Exception as e:
                 self.add_to_log(f"Error loading program: {str(e)}", "ERROR")
                 QMessageBox.critical(
-                    self, 
-                    "Load Error",
-                    f"Could not load the file:\n{str(e)}"
+                    self, "Load Error", f"Could not load the file:\n{str(e)}"
                 )
 
     def new_file(self):
@@ -1669,7 +1884,7 @@ END
         # Check if there's content that might need saving
         if self.check_save_current():
             return  # User canceled
-        
+
         # Reset editor and simulation
         self.code_editor.setPlainText("")
         self.reset_simulation()
@@ -1682,23 +1897,24 @@ END
         """Check if current work should be saved before proceeding"""
         if self.code_editor.toPlainText().strip():
             reply = QMessageBox.question(
-                self, 'Save Changes?',
-                'Do you want to save changes to the current program?',
+                self,
+                "Save Changes?",
+                "Do you want to save changes to the current program?",
                 QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-                QMessageBox.Save
+                QMessageBox.Save,
             )
-            
+
             if reply == QMessageBox.Save:
                 return self.save_program()
             elif reply == QMessageBox.Cancel:
                 return True  # User canceled operation
-        
+
         return False  # No need to save or user discarded changes
 
     def show_about(self):
         """Show about dialog"""
         QMessageBox.information(
-            self, 
+            self,
             "About Neo8085",
             f"Neo8085 - 8085 Microprocessor Simulator\n\n"
             f"Copyright (C) 2025 Shahibur Rahaman\n"
@@ -1708,46 +1924,46 @@ END
             f"This program is free software: you can redistribute it and/or modify "
             f"it under the terms of the GNU General Public License as published by "
             f"the Free Software Foundation, either version 3 of the License, or "
-            f"(at your option) any later version."
+            f"(at your option) any later version.",
         )
 
     def reset_simulation(self):
         """Reset the processor and simulator state"""
         # Stop any running execution
         self.stop_execution()
-        
+
         # Create new processor instance
         self.processor = Processor8085()
-        
+
         # Reset UI elements
         self.update_registers_display()
         self.update_flags_display()
         self.load_memory_display(0x0000)
-        
+
         # Reset execution statistics and timer
         self.execution_count = 0
         self.instr_count_label.setText("Instructions: 0")
         self.reset_elapsed_timer()
-        
+
         # Update status
         self.set_status("Reset - Ready to Assemble", "normal")
-        
+
         # Add log entry
         self.add_to_log("Simulator reset", "SYSTEM")
-        
+
         # Reset code editor highlight
         self.code_editor.highlightCurrentLine()
 
     def set_status(self, text, status_type="normal"):
         """Set status text with consistent styling
-        
+
         Parameters:
         text (str): The status message to display
         status_type (str): One of 'normal', 'success', 'warning', 'error'
         """
         # Set the text
         self.status_label.setText(text)
-        
+
         # Common styling properties
         base_style = """
             background-color: {bg_color};
@@ -1757,17 +1973,17 @@ END
             border-radius: 3px;
             min-height: 20px;
         """
-        
+
         # Choose background color based on status type
         bg_colors = {
-            "normal": "#FFFFFF",    # White for normal/ready states
-            "success": "#DFF6DD",   # Light green for success/compile/run states
-            "warning": "#FFF4CE",   # Light yellow for warning/halt/pause states
-            "error": "#FDE7E9"      # Light red for error states
+            "normal": "#FFFFFF",  # White for normal/ready states
+            "success": "#DFF6DD",  # Light green for success/compile/run states
+            "warning": "#FFF4CE",  # Light yellow for warning/halt/pause states
+            "error": "#FDE7E9",  # Light red for error states
         }
-        
+
         bg_color = bg_colors.get(status_type, "#FFFFFF")
-        
+
         # Apply the style
         self.status_label.setStyleSheet(base_style.format(bg_color=bg_color))
 
@@ -1788,59 +2004,61 @@ END
         converter_layout = QVBoxLayout(converter_widget)
         converter_layout.setContentsMargins(0, 0, 0, 0)  # Remove all margins
         converter_layout.setSpacing(0)  # Remove spacing between elements
-        
+
         # Set white background for the entire widget
         converter_widget.setStyleSheet("background-color: white;")
-        
+
         # Title
         converter_header = QLabel("NUMBER CONVERTER")
         converter_header.setFixedHeight(32)
         converter_header.setFont(QFont("Segoe UI", 12))
-        converter_header.setStyleSheet("background-color: #5C2D91; color: white; border: none;")
+        converter_header.setStyleSheet(
+            "background-color: #5C2D91; color: white; border: none;"
+        )
         converter_header.setAlignment(Qt.AlignCenter)
-        
+
         # Create form layout for input fields with minimal margins
         form_layout = QFormLayout()
         form_layout.setContentsMargins(10, 2, 10, 8)  # Minimal margins
         form_layout.setSpacing(4)  # Reduced spacing
-        
+
         # Hex input
         self.hex_input = QLineEdit()
         self.hex_input.setFont(QFont("Consolas", 10))
         self.hex_input.setPlaceholderText("Enter hex value")
-        self.hex_input.textChanged.connect(lambda: self.convert_number('hex'))
-        
+        self.hex_input.textChanged.connect(lambda: self.convert_number("hex"))
+
         # Binary input
         self.bin_input = QLineEdit()
         self.bin_input.setFont(QFont("Consolas", 10))
         self.bin_input.setPlaceholderText("Enter binary value")
-        self.bin_input.textChanged.connect(lambda: self.convert_number('bin'))
-        
+        self.bin_input.textChanged.connect(lambda: self.convert_number("bin"))
+
         # Decimal input
         self.dec_input = QLineEdit()
         self.dec_input.setFont(QFont("Consolas", 10))
         self.dec_input.setPlaceholderText("Enter decimal value")
-        self.dec_input.textChanged.connect(lambda: self.convert_number('dec'))
-        
+        self.dec_input.textChanged.connect(lambda: self.convert_number("dec"))
+
         # ASCII input (new)
         self.ascii_input = QLineEdit()
         self.ascii_input.setFont(QFont("Consolas", 10))
         self.ascii_input.setPlaceholderText("Enter ASCII character")
         self.ascii_input.setMaxLength(1)  # Only allow one character
-        self.ascii_input.textChanged.connect(lambda: self.convert_number('ascii'))
-        
+        self.ascii_input.textChanged.connect(lambda: self.convert_number("ascii"))
+
         # Add fields to form
         form_layout.addRow("Hex:", self.hex_input)
         form_layout.addRow("Binary:", self.bin_input)
         form_layout.addRow("Decimal:", self.dec_input)
         form_layout.addRow("ASCII:", self.ascii_input)
-        
+
         # Add to layout
         converter_layout.addWidget(converter_header)
         converter_layout.addLayout(form_layout)
-        
+
         # Remove padding at the bottom (no stretch)
-        
+
         return converter_widget
 
     def convert_number(self, source):
@@ -1850,9 +2068,9 @@ END
         self.bin_input.blockSignals(True)
         self.dec_input.blockSignals(True)
         self.ascii_input.blockSignals(True)
-        
+
         try:
-            if source == 'hex':
+            if source == "hex":
                 # Convert from hex
                 hex_value = self.hex_input.text().strip()
                 if hex_value:
@@ -1868,8 +2086,8 @@ END
                     self.bin_input.setText("")
                     self.dec_input.setText("")
                     self.ascii_input.setText("")
-                    
-            elif source == 'bin':
+
+            elif source == "bin":
                 # Convert from binary
                 bin_value = self.bin_input.text().strip()
                 if bin_value:
@@ -1885,8 +2103,8 @@ END
                     self.hex_input.setText("")
                     self.dec_input.setText("")
                     self.ascii_input.setText("")
-                    
-            elif source == 'dec':
+
+            elif source == "dec":
                 # Convert from decimal
                 dec_value = self.dec_input.text().strip()
                 if dec_value:
@@ -1902,14 +2120,16 @@ END
                     self.hex_input.setText("")
                     self.bin_input.setText("")
                     self.ascii_input.setText("")
-                    
-            elif source == 'ascii':
+
+            elif source == "ascii":
                 # Convert from ASCII
                 ascii_value = self.ascii_input.text()
                 if ascii_value and ascii_value != "X":
                     if len(ascii_value) > 0:
                         value = ord(ascii_value[0])
-                        self.hex_input.setText(hex(value)[2:].upper())  # Remove '0x' prefix
+                        self.hex_input.setText(
+                            hex(value)[2:].upper()
+                        )  # Remove '0x' prefix
                         self.bin_input.setText(bin(value)[2:])  # Remove '0b' prefix
                         self.dec_input.setText(str(value))
                 else:
@@ -1917,11 +2137,11 @@ END
                         self.hex_input.setText("")
                         self.bin_input.setText("")
                         self.dec_input.setText("")
-                    
+
         except ValueError:
             # Invalid input, do nothing
             pass
-        
+
         # Re-enable signals
         self.hex_input.blockSignals(False)
         self.bin_input.blockSignals(False)
@@ -1934,39 +2154,42 @@ END
         editor_layout = QVBoxLayout(memory_editor_widget)
         editor_layout.setContentsMargins(0, 0, 0, 0)  # Remove all margins
         editor_layout.setSpacing(0)  # Remove spacing between elements
-        
+
         # Set white background for the entire widget
         memory_editor_widget.setStyleSheet("background-color: white;")
-        
+
         # Title
         editor_header = QLabel("MEMORY EDITOR")
         editor_header.setFixedHeight(30)
         editor_header.setFont(QFont("Segoe UI", 12))
-        editor_header.setStyleSheet("background-color: #5C2D91; color: white; border: none;")
+        editor_header.setStyleSheet(
+            "background-color: #5C2D91; color: white; border: none;"
+        )
         editor_header.setAlignment(Qt.AlignCenter)
-        
+
         # Create form layout for input fields
         form_layout = QFormLayout()
         form_layout.setContentsMargins(10, 2, 10, 8)  # Minimal margins
         form_layout.setSpacing(4)  # Reduced spacing
-        
+
         # Address input
         self.memory_addr_input = QLineEdit()
         self.memory_addr_input.setFont(QFont("Consolas", 10))
         self.memory_addr_input.setPlaceholderText("Memory address (0-65535)[H]")
-        
+
         # Value input
         self.memory_value_input = QLineEdit()
         self.memory_value_input.setFont(QFont("Consolas", 10))
         self.memory_value_input.setPlaceholderText("Value (0-255)[H]")
-        
+
         # Add fields to form
         form_layout.addRow("Address:", self.memory_addr_input)
         form_layout.addRow("Value:", self.memory_value_input)
-        
+
         # Add write button
         self.write_memory_button = QPushButton("Write to Memory")
-        self.write_memory_button.setStyleSheet("""
+        self.write_memory_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #0078D7;
                 color: white;
@@ -1977,14 +2200,15 @@ END
             QPushButton:hover {
                 background-color: #0063B1;
             }
-        """)
+        """
+        )
         self.write_memory_button.clicked.connect(self.write_memory_value)
-        
+
         # Add to layout
         editor_layout.addWidget(editor_header)
         editor_layout.addLayout(form_layout)
         editor_layout.addWidget(self.write_memory_button)
-        
+
         return memory_editor_widget
 
     def write_memory_value(self):
@@ -1993,56 +2217,72 @@ END
             # Parse address and value from inputs
             addr_text = self.memory_addr_input.text().strip()
             value_text = self.memory_value_input.text().strip()
-            
+
             if not addr_text or not value_text:
                 self.add_to_log("Please enter both address and value", "ERROR")
                 return
-            
+
             address = self.parse_address(addr_text)
             value = self.parse_address(value_text)
-            
+
             if not (0 <= address < 65536):  # 64K memory space
-                self.add_to_log(f"Address must be in range 0-65535 (0000H-FFFFH)", "ERROR")
+                self.add_to_log(
+                    f"Address must be in range 0-65535 (0000H-FFFFH)", "ERROR"
+                )
                 return
-                    
+
             if not (0 <= value <= 255):  # Byte value
                 self.add_to_log(f"Value must be in range 0-255 (00H-FFH)", "ERROR")
                 return
-            
+
             # Check if address is in program memory range
-            if hasattr(self.processor, 'is_program_memory') and self.processor.is_program_memory(address):
-                self.add_to_log(f"Cannot modify program memory at {address:04X}H (0-{self.processor.program_end_address-1:04X}H)", "ERROR")
+            if hasattr(
+                self.processor, "is_program_memory"
+            ) and self.processor.is_program_memory(address):
+                self.add_to_log(
+                    f"Cannot modify program memory at {address:04X}H (0-{self.processor.program_end_address-1:04X}H)",
+                    "ERROR",
+                )
                 self.memory_addr_input.selectAll()  # Select the address text for easy correction
                 return
-            
+
             # Write value to memory (only if not in program memory)
             self.processor.memory[address] = value
-            
+
             # Update memory view if address is visible
             base_addr = 0
-            if hasattr(self, 'memory_table') and self.memory_table.rowCount() > 0:
-                base_addr = int(self.memory_table.item(0, 1).text()[:-1], 16)  # Get hex addr, remove 'H'
-                    
+            if hasattr(self, "memory_table") and self.memory_table.rowCount() > 0:
+                base_addr = int(
+                    self.memory_table.item(0, 1).text()[:-1], 16
+                )  # Get hex addr, remove 'H'
+
             if base_addr <= address < base_addr + 256:  # If address is in current view
                 row = (address - base_addr) // 16
-                col = (address - base_addr) % 16 + 2  # +2 because we now have two address columns
-                    
-                if row < self.memory_table.rowCount() and col < self.memory_table.columnCount():
+                col = (
+                    address - base_addr
+                ) % 16 + 2  # +2 because we now have two address columns
+
+                if (
+                    row < self.memory_table.rowCount()
+                    and col < self.memory_table.columnCount()
+                ):
                     self.memory_table.item(row, col).setText(f"{value:02X}")
-            
+
             # Log with appropriate format
-            if addr_text.upper().endswith('H'):
+            if addr_text.upper().endswith("H"):
                 addr_display = f"{address:04X}H"
             else:
                 addr_display = str(address)
-                
-            if value_text.upper().endswith('H'):
+
+            if value_text.upper().endswith("H"):
                 value_display = f"{value:02X}H"
             else:
                 value_display = str(value)
-                
-            self.add_to_log(f"Memory updated: [{addr_display}] = {value_display}", "SYSTEM")
-                
+
+            self.add_to_log(
+                f"Memory updated: [{addr_display}] = {value_display}", "SYSTEM"
+            )
+
         except ValueError as e:
             self.add_to_log(f"Error: {str(e)}", "ERROR")
         except Exception as e:
@@ -2066,33 +2306,35 @@ END
         else:
             title += "Untitled"
             if self.document_modified:
-                title += "* [Changes not saved]"  # Add asterisk to indicate unsaved changes
-        
+                title += (
+                    "* [Changes not saved]"  # Add asterisk to indicate unsaved changes
+                )
+
         self.setWindowTitle(title)
+
 
 def main():
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon("8085-logo.ico"))
-    
+
     # Show splash screen
     splash_pix = QPixmap("8085-splash-screen.png")
     if not splash_pix.isNull():
         splash = QSplashScreen(splash_pix, Qt.WindowStaysOnTopHint)
         splash.show()
         QTimer.singleShot(2000, splash.close)
-    
+
     # Create and show main window
     window = Simulator()
-    
+
     # Apply the pointing hand cursor to all buttons
     for button in window.findChildren(QPushButton):
         button.setCursor(Qt.PointingHandCursor)
-    
+
     QTimer.singleShot(2000, window.show)
-    
+
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()
-
-
