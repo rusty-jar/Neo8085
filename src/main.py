@@ -536,7 +536,7 @@ class Simulator(QWidget):
         if total_ms < 1000:  # Less than 1 second
             time_str = f"{total_ms} ms"
         elif total_ms < 60000:  # Less than 1 minute
-            time_str = f"{total_ms/1000:.2f} s"
+            time_str = f"{total_ms / 1000:.2f} s"
         else:  # Minutes and seconds
             minutes = int(total_ms / 60000)
             seconds = (total_ms % 60000) / 1000
@@ -1339,8 +1339,8 @@ END
         """Start continuous execution mode without code highlighting for better performance"""
         # Assemble if not already done
         if (
-            not hasattr(self.processor, "parsed_program")
-            or not self.processor.parsed_program
+                not hasattr(self.processor, "parsed_program")
+                or not self.processor.parsed_program
         ):
             if not self.compile_program():
                 return
@@ -1538,8 +1538,8 @@ END
         """Execute a single instruction"""
         # Make sure we have an assembled program
         if (
-            not hasattr(self.processor, "parsed_program")
-            or not self.processor.parsed_program
+                not hasattr(self.processor, "parsed_program")
+                or not self.processor.parsed_program
         ):
             if not self.compile_program():
                 return
@@ -1560,10 +1560,10 @@ END
 
         # Check for breakpoints when running continuously
         if (
-            hasattr(self, "running")
-            and self.running
-            and line_num is not None
-            and (line_num - 1) in self.code_editor.breakpoints
+                hasattr(self, "running")
+                and self.running
+                and line_num is not None
+                and (line_num - 1) in self.code_editor.breakpoints
         ):
             self.add_to_log(f"Breakpoint hit at line {line_num}", "SYSTEM")
             self.stop_execution()
@@ -1595,7 +1595,7 @@ END
 
         # Log the instruction that was executed - only in normal mode or for important events
         if self.processor.last_instruction and (
-            self.use_highlighting or result != "OK"
+                self.use_highlighting or result != "OK"
         ):
             self.add_to_log(f"{pc:04X}: {self.processor.last_instruction}", result)
 
@@ -1619,8 +1619,8 @@ END
         """Start continuous execution mode"""
         # Assemble if not already done
         if (
-            not hasattr(self.processor, "parsed_program")
-            or not self.processor.parsed_program
+                not hasattr(self.processor, "parsed_program")
+                or not self.processor.parsed_program
         ):
             if not self.compile_program():
                 return
@@ -2236,10 +2236,10 @@ END
 
             # Check if address is in program memory range
             if hasattr(
-                self.processor, "is_program_memory"
+                    self.processor, "is_program_memory"
             ) and self.processor.is_program_memory(address):
                 self.add_to_log(
-                    f"Cannot modify program memory at {address:04X}H (0-{self.processor.program_end_address-1:04X}H)",
+                    f"Cannot modify program memory at {address:04X}H (0-{self.processor.program_end_address - 1:04X}H)",
                     "ERROR",
                 )
                 self.memory_addr_input.selectAll()  # Select the address text for easy correction
@@ -2258,12 +2258,12 @@ END
             if base_addr <= address < base_addr + 256:  # If address is in current view
                 row = (address - base_addr) // 16
                 col = (
-                    address - base_addr
-                ) % 16 + 2  # +2 because we now have two address columns
+                              address - base_addr
+                      ) % 16 + 2  # +2 because we now have two address columns
 
                 if (
-                    row < self.memory_table.rowCount()
-                    and col < self.memory_table.columnCount()
+                        row < self.memory_table.rowCount()
+                        and col < self.memory_table.columnCount()
                 ):
                     self.memory_table.item(row, col).setText(f"{value:02X}")
 
@@ -2314,6 +2314,7 @@ END
 
 class MemoryTableWidget(QTableWidget):
     """Custom QTableWidget that clears selection when losing focus"""
+
     def focusOutEvent(self, event):
         self.clearSelection()
         super().focusOutEvent(event)
