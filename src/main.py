@@ -70,7 +70,7 @@ from PySide6.QtWidgets import (
 # Local application imports
 from assembler import Assembler8085
 from processor import Processor8085
-from version import __version__, version_string, display_version
+from version import version_string, display_version
 
 
 class LineNumberArea(QWidget):
@@ -80,7 +80,7 @@ class LineNumberArea(QWidget):
         super().__init__(editor)
         self.editor = editor
         self.simulator = None
-        self.setCursor(Qt.PointingHandCursor)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def sizeHint(self):
         return QSize(self.editor.lineNumberAreaWidth(), 0)
@@ -139,7 +139,7 @@ class AssemblyHighlighter(QSyntaxHighlighter):
         # Format definitions with appropriate colors for code elements
         instruction_format = QTextCharFormat()
         instruction_format.setForeground(QColor("#8A2BE2"))  # Purple
-        instruction_format.setFontWeight(QFont.Bold)
+        instruction_format.setFontWeight(QFont.Weight.Bold)
 
         register_format = QTextCharFormat()
         register_format.setForeground(QColor("#2E8B57"))  # Sea Green
@@ -159,7 +159,7 @@ class AssemblyHighlighter(QSyntaxHighlighter):
 
         directive_format = QTextCharFormat()
         directive_format.setForeground(QColor("#FF6600"))  # Orange
-        directive_format.setFontWeight(QFont.Bold)
+        directive_format.setFontWeight(QFont.Weight.Bold)
 
         # 8085 instruction set
         instructions = [
@@ -244,14 +244,14 @@ class AssemblyHighlighter(QSyntaxHighlighter):
         # Create highlighting rules for instructions
         for instruction in instructions:
             pattern = QRegularExpression(
-                f"\\b{instruction}\\b", QRegularExpression.CaseInsensitiveOption
+                f"\\b{instruction}\\b", QRegularExpression.PatternOption.CaseInsensitiveOption
             )
             self.highlighting_rules.append((pattern, instruction_format))
 
         # Create highlighting rules for directives
         for directive in directives:
             pattern = QRegularExpression(
-                f"\\b{directive}\\b", QRegularExpression.CaseInsensitiveOption
+                f"\\b{directive}\\b", QRegularExpression.PatternOption.CaseInsensitiveOption
             )
             self.highlighting_rules.append((pattern, directive_format))
 
@@ -260,7 +260,7 @@ class AssemblyHighlighter(QSyntaxHighlighter):
 
         for reg in registers:
             pattern = QRegularExpression(
-                f"\\b{reg}\\b", QRegularExpression.CaseInsensitiveOption
+                f"\\b{reg}\\b", QRegularExpression.PatternOption.CaseInsensitiveOption
             )
             self.highlighting_rules.append((pattern, register_format))
 
@@ -345,10 +345,10 @@ class LineNumberedEditor(QPlainTextEdit):
         self.status_bar.setStyleSheet(
             "background-color: #FFFFFF; padding: 2px 5px; border: none; solid #DDDDDD;"
         )
-        self.status_bar.setAlignment(Qt.AlignLeft)
+        self.status_bar.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.status_bar.setFixedHeight(20)
 
-        self.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.lineNumberArea = LineNumberArea(self)
         self.breakpoints = set()
 
@@ -425,7 +425,7 @@ class LineNumberedEditor(QPlainTextEdit):
                     int(top),
                     self.lineNumberArea.width() - 5,
                     int(self.fontMetrics().height()),
-                    Qt.AlignRight,
+                    Qt.AlignmentFlag.AlignRight,
                     number,
                 )
 
@@ -1123,11 +1123,11 @@ class Simulator(QWidget):
         self.memory_table.horizontalHeader().setDefaultSectionSize(45)
         # Set decimal address column to resize to contents
         self.memory_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeToContents
+            0, QHeaderView.ResizeMode.ResizeToContents
         )
         # Set hex address column to be wider
         self.memory_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeToContents
+            1, QHeaderView.ResizeMode.ResizeToContents
         )
         # Alternatively, set a fixed width that's wider:
         self.memory_table.setColumnWidth(1, 80)  # Make hex address column 80px wide
@@ -1209,7 +1209,7 @@ class Simulator(QWidget):
 ;    - Modified files show an asterisk (*) in the title bar
 ;
 ; 2. ASSEMBLING & EXECUTION:
-;    - Click "Assemble" or press Ctrl+B to assemble the code
+;    - Click "Assemble
 ;    - "Step" (F10) to execute one instruction at a time
 ;    - "Run" (F5) to execute continuously with highlighting
 ;    - "Fast mode" (Ctrl+Shift+F5) to execute at higher speed without highlighting
@@ -1854,8 +1854,6 @@ END
         if self.check_save_current():
             return
 
-        from PySide6.QtWidgets import QFileDialog
-
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Open Assembly Program", "", "Assembly Files (*.asm);;All Files (*.*)"
         )
@@ -2016,7 +2014,7 @@ END
         converter_header.setStyleSheet(
             "background-color: #5C2D91; color: white; border: none;"
         )
-        converter_header.setAlignment(Qt.AlignCenter)
+        converter_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Create form layout for input fields with minimal margins
         form_layout = QFormLayout()
@@ -2126,9 +2124,8 @@ END
                 if ascii_value and ascii_value != "X":
                     if len(ascii_value) > 0:
                         value = ord(ascii_value[0])
-                        self.hex_input.setText(
-                            hex(value)[2:].upper())
-                        # Remove '0x' prefix
+                        self.hex_input.setText(hex(value)[2:].upper())
+                                               # Remove '0x' prefix
                         self.bin_input.setText(bin(value)[2:])  # Remove '0b' prefix
                         self.dec_input.setText(str(value))
                 else:
@@ -2327,7 +2324,7 @@ def main():
     # Show splash screen
     splash_pix = QPixmap("8085-splash-screen.png")
     if not splash_pix.isNull():
-        splash = QSplashScreen(splash_pix, Qt.WindowStaysOnTopHint)
+        splash = QSplashScreen(splash_pix, Qt.WindowType.WindowStaysOnTopHint)
         splash.show()
         QTimer.singleShot(2000, splash.close)
 
@@ -2336,7 +2333,7 @@ def main():
 
     # Apply the pointing hand cursor to all buttons
     for button in window.findChildren(QPushButton):
-        button.setCursor(Qt.PointingHandCursor)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
 
     QTimer.singleShot(2000, window.show)
 
