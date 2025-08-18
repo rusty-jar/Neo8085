@@ -60,6 +60,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSplashScreen,
+    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -665,16 +666,16 @@ class Simulator(QWidget):
 
         main_layout.addWidget(self.menu_bar)
 
-        # Content container
-        content_container = QWidget()
-        content_layout = QVBoxLayout(content_container)
-        content_layout.setContentsMargins(0, 0, 5, 5)
+        # Content Splitter
+        content_splitter = QSplitter()
+        content_splitter.setContentsMargins(0, 0, 5, 5)
+        # Content Layout, this should be QVBoxLayout with just splitter
+        content_layout = QVBoxLayout()
 
-        # Main Content Layout
-        main_content = QHBoxLayout()
-
+        # Left Part
+        left_part = QWidget()
         # Left Panel - Code Editor and Execution Log
-        left_panel = QVBoxLayout()
+        left_panel = QVBoxLayout(left_part)
 
         # Global styling
         self.setStyleSheet(
@@ -834,10 +835,11 @@ class Simulator(QWidget):
 
         log_converter_layout.addLayout(right_side_layout, 1)
         left_panel.addLayout(log_converter_layout, 2)
-        main_content.addLayout(left_panel, 2)
 
+        # Right Part
+        right_part = QWidget()
         # Right Panel - Registers, Flags, and Memory
-        right_panel = QVBoxLayout()
+        right_panel = QVBoxLayout(right_part)
 
         # Simulator header
         simulator_header = QLabel("SIMULATOR OPERATIONS")
@@ -1167,11 +1169,17 @@ class Simulator(QWidget):
 
         right_panel.addLayout(stats_layout)
 
-        # Add right panel to main content
-        main_content.addLayout(right_panel, 1)  # Right panel gets less horizontal space
+        # Add left part to main content
+        content_splitter.addWidget(left_part)
+        # Add right part to main content
+        content_splitter.addWidget(right_part)
+        content_splitter.setStretchFactor(0, 55) # Left panel gets more horizontal space
+        content_splitter.setStretchFactor(1, 45) # Right panel gets less horizontal space
 
-        content_layout.addLayout(main_content)
-        main_layout.addWidget(content_container)
+        # content splitter needs to occupy whole of the vertical space otherwise
+        # menubar has some white spaces, this can be kind of a hack!
+        content_layout.addWidget(content_splitter, 1)
+        main_layout.addLayout(content_layout)
 
         # Set up the main layout
         self.setLayout(main_layout)
