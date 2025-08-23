@@ -78,6 +78,7 @@ class LineNumberArea(QWidget):
 
     def __init__(self, editor):
         super().__init__(editor)
+        self.setFont(QFont("Consolas", 12))
         self.editor = editor
         self.simulator = None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -90,7 +91,7 @@ class LineNumberArea(QWidget):
 
     def set_simulator(self, simulator):
         """Store reference to simulator for logging capabilities"""
-        self.simulator = simulator
+        self.simulator: Simulator = simulator
 
     def mousePressEvent(self, event):
         """Handle mouse clicks to toggle breakpoints on valid code lines"""
@@ -373,7 +374,9 @@ class LineNumberedEditor(QPlainTextEdit):
 
     def lineNumberAreaWidth(self):
         """Calculate required width for line number display area"""
-        digits = len(str(self.blockCount())) + 1
+        digits = len(str(self.blockCount())) + (2 if self.lineNumberArea.simulator is None
+                                                 or len(self.lineNumberArea.simulator.processor.line_to_address_map) == 0
+                                                   else 8)
         return 15 + self.fontMetrics().horizontalAdvance("9") * digits
 
     def updateLineNumberAreaWidth(self, _):
@@ -410,7 +413,12 @@ class LineNumberedEditor(QPlainTextEdit):
 
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
-                number = str(blockNumber + 1)
+                line_to_address_map = self.lineNumberArea.simulator.processor.line_to_address_map
+                line_number = blockNumber + 1
+                number = (str(line_number) if len(line_to_address_map) == 0
+                          else
+                            (f"{line_number}      ") if line_number not in line_to_address_map
+                                else f"{line_number} {line_to_address_map[line_number]:04X}H")
                 painter.setPen(QColor("#6D6D6D"))
 
                 # Draw breakpoint marker
@@ -1500,6 +1508,7 @@ END
             # Update UI
             self.update_registers_display()
             self.update_flags_display()
+            self.code_editor.updateLineNumberAreaWidth(0)
             # By setting the text to ORG address we are allowing the user to
             # switch between Follow PC or ORG easily
             self.memory_search.setText(f"{assembly_output.starting_address:04X}H")
@@ -1956,6 +1965,8 @@ END
 
         # Reset code editor highlight
         self.code_editor.highlightCurrentLine()
+        # Update line number area width
+        self.code_editor.updateLineNumberAreaWidth(0)
 
     def set_status(self, text, status_type="normal"):
         """Set status text with consistent styling
