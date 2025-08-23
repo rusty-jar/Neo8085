@@ -1500,7 +1500,10 @@ END
             # Update UI
             self.update_registers_display()
             self.update_flags_display()
-            self.load_memory_display(0x0000)
+            # By setting the text to ORG address we are allowing the user to
+            # switch between Follow PC or ORG easily
+            self.memory_search.setText(f"{assembly_output.starting_address:04X}H")
+            self.memory_enter_button.click()
 
             self.add_to_log("Program assembled successfully", "SYSTEM")
             self.add_to_log("Machine code loaded into memory", "SYSTEM")
@@ -1938,6 +1941,7 @@ END
         self.update_registers_display()
         self.update_flags_display()
         self.load_memory_display(0x0000)
+        self.memory_search.setText("")
 
         # Reset execution statistics and timer
         self.execution_count = 0
