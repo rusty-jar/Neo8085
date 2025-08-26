@@ -1353,6 +1353,9 @@ END
 
     def start_fast_execution(self):
         """Start continuous execution mode without code highlighting for better performance"""
+        # Set the highlighting flag to False for faster execution
+        self.use_highlighting = False
+
         # Assemble if not already done
         if (
                 not hasattr(self.processor, "parsed_program")
@@ -1368,9 +1371,6 @@ END
             )
             self.set_status("Program halted - Reset to run again", "warning")
             return
-
-        # Set the highlighting flag to False for faster execution
-        self.use_highlighting = False
 
         # Start elapsed timer
         self.start_elapsed_timer()
@@ -1531,6 +1531,8 @@ END
             self.instr_count_label.setText("Instructions: 0")
             self.reset_elapsed_timer()
 
+            self.highlight_current_instruction()
+
             return True
 
         except SyntaxError as e:
@@ -1561,8 +1563,8 @@ END
                 not hasattr(self.processor, "parsed_program")
                 or not self.processor.parsed_program
         ):
-            if not self.compile_program():
-                return
+            self.compile_program()
+            return
 
         # Start timing for this step
         self.start_elapsed_timer()
@@ -1574,33 +1576,29 @@ END
                 self.stop_execution()
             return "HALT"
 
-        # Get current PC and find corresponding line
-        pc = self.processor.registers["PC"]
-        line_num = self.processor.address_to_line_map.get(pc)
+        # Get last PC and find corresponding line
+        last_pc = self.processor.registers["PC"]
+        last_line_num = self.processor.address_to_line_map.get(last_pc)
 
         # Check for breakpoints when running continuously
         if (
                 hasattr(self, "running")
                 and self.running
-                and line_num is not None
-                and (line_num - 1) in self.code_editor.breakpoints
+                and last_line_num is not None
+                and (last_line_num - 1) in self.code_editor.breakpoints
         ):
-            self.add_to_log(f"Breakpoint hit at line {line_num}", "SYSTEM")
+            self.add_to_log(f"Breakpoint hit at line {last_line_num}", "SYSTEM")
             self.stop_execution()
             # Always highlight on breakpoint hit, even in fast mode
             self.code_editor.highlightExecutedLine(
-                line_num - 1
+                last_line_num - 1
             )  # Convert to 0-indexed for highlighting
             return
 
-        # Highlight the current line before executing (only if highlighting is enabled)
-        if self.use_highlighting and line_num is not None:
-            self.code_editor.highlightExecutedLine(
-                line_num - 1
-            )  # Convert to 0-indexed for highlighting
-
         # Execute one instruction
         result = self.processor.step()
+
+        self.highlight_current_instruction()
 
         # Update execution count
         self.execution_count += 1
@@ -1617,7 +1615,7 @@ END
         if self.processor.last_instruction and (
                 self.use_highlighting or result != "OK"
         ):
-            self.add_to_log(f"{pc:04X}: {self.processor.last_instruction}", result)
+            self.add_to_log(f"{last_pc:04X}: {self.processor.last_instruction}", result)
 
         # Update UI components
         self.update_registers_display()
@@ -1634,6 +1632,18 @@ END
             self.stop_execution()
 
         return result
+
+    def highlight_current_instruction(self):
+        """Highlight current instruction"""
+        # Get current PC and find corresponding line
+        cuurent_pc = self.processor.registers["PC"]
+        line_num = self.processor.address_to_line_map.get(cuurent_pc)
+
+        # Highlight the current line before executing (only if highlighting is enabled)
+        if self.use_highlighting and line_num is not None:
+            self.code_editor.highlightExecutedLine(
+                line_num - 1
+            )  # Convert to 0-indexed for highlighting
 
     def start_continuous_execution(self):
         """Start continuous execution mode"""
