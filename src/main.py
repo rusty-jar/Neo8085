@@ -73,6 +73,26 @@ from assembler import Assembler8085
 from processor import Processor8085
 from version import version_string, display_version
 
+class Header(QLabel):
+    """Header for different sections"""
+
+    def __init__(self, header: str):
+        super().__init__(header)
+        self.setFixedHeight(30)
+        self.setFont(QFont("Segoe UI", 12))
+        self.setStyleSheet(
+            "background-color: #5C2D91; color: white; border: none;"
+        )
+        self.setAlignment(Qt.AlignCenter)
+
+
+class Label(QLabel):
+    """Label - QLabel wrapper"""
+
+    def __init__(self, text: str):
+        super().__init__(text)
+        self.setFont(QFont("Consolas", 12))
+
 
 class LineNumberArea(QWidget):
     """Widget for displaying line numbers and breakpoints in code editor"""
@@ -850,13 +870,7 @@ class Simulator(QWidget):
         right_panel = QVBoxLayout(right_part)
 
         # Simulator header
-        simulator_header = QLabel("SIMULATOR OPERATIONS")
-        simulator_header.setFixedHeight(30)
-        simulator_header.setFont(QFont("Segoe UI", 12))
-        simulator_header.setStyleSheet(
-            "min-height: 30px; background-color: #5C2D91; color: white; border: none; margin-top: 5px;"
-        )
-        simulator_header.setAlignment(Qt.AlignCenter)
+        simulator_header = Header("SIMULATOR OPERATIONS")
         right_panel.addWidget(simulator_header)
 
         # Control buttons
@@ -968,61 +982,44 @@ class Simulator(QWidget):
         separator.setStyleSheet("background-color: #555;")
         right_panel.addWidget(separator)
 
-        # Registers and Flags display
-        registers_layout = QHBoxLayout()
+        # Registers and Stack display
+        registers_stack_layout = QHBoxLayout()
 
         self.register_labels = {}
-        self.flag_labels = {}
 
         self.registers_grid = QGridLayout()
-        self.flags_grid = QGridLayout()
 
         # Registers header
-        register_header = QLabel("REGISTERS")
-        register_header.setFixedHeight(40)
-        register_header.setFont(QFont("Segoe UI", 12))
-        register_header.setStyleSheet(
-            "background-color: #5C2D91; color: white; border: none;"
-        )
-        register_header.setAlignment(Qt.AlignCenter)
+        register_header = Header("REGISTERS")
         self.registers_grid.addWidget(register_header, 0, 0, 1, 2)
 
-        # A Register - Full Width
-        self.add_register("A", 1, 0, 1, 2)
+        # A Register & Flags
+        self.add_register("A", 1, 0)
+        self.flags_group = Flags(self)
+        self.registers_grid.addWidget(self.flags_group, 1, 1)
+
+        # PSW Register - Full Width
+        self.add_register("PSW", 2, 0, 1, 2)
 
         # B, C, D, E, H, L Registers - Two Columns
-        self.add_register("B", 2, 0)
-        self.add_register("C", 2, 1)
-        self.add_register("D", 3, 0)
-        self.add_register("E", 3, 1)
-        self.add_register("H", 4, 0)
-        self.add_register("L", 4, 1)
+        self.add_register("B", 3, 0)
+        self.add_register("C", 3, 1)
+        self.add_register("D", 4, 0)
+        self.add_register("E", 4, 1)
+        self.add_register("H", 5, 0)
+        self.add_register("L", 5, 1)
 
-        # SP, PC and PSW Registers - Full Width
-        self.add_register("SP", 5, 0, 1, 2)
-        self.add_register("PC", 6, 0, 1, 2)
-        self.add_register("PSW", 7, 0, 1, 2)
+        # SP and PC Registers - Full Width
+        self.add_register("SP", 6, 0, 1, 2)
+        self.add_register("PC", 7, 0, 1, 2)
 
-        # Flags Header
-        flag_header = QLabel("FLAGS")
-        flag_header.setFixedHeight(40)
-        flag_header.setFont(QFont("Segoe UI", 12))
-        flag_header.setStyleSheet(
-            "background-color: #5C2D91; color: white; border: none;"
-        )
-        flag_header.setAlignment(Qt.AlignCenter)
-        self.flags_grid.addWidget(flag_header, 0, 0, 1, 1)
+        self.stack = Stack(self)
 
-        # Flags
-        self.add_flag("S", 1)
-        self.add_flag("Z", 2)
-        self.add_flag("AC", 3)
-        self.add_flag("P", 4)
-        self.add_flag("C", 5)
-
-        registers_layout.addLayout(self.registers_grid, 3)
-        registers_layout.addLayout(self.flags_grid, 1)
-        right_panel.addLayout(registers_layout)
+        registers_stack_layout.addLayout(self.registers_grid, 1)
+        registers_stack_layout.addLayout(self.stack, 1)
+        
+        right_panel.addLayout(registers_stack_layout)
+        self.update_registers_display()
 
         # Separator
         separator = QFrame()
@@ -1031,13 +1028,7 @@ class Simulator(QWidget):
         right_panel.addWidget(separator)
 
         # Memory View
-        memory_header = QLabel("MEMORY")
-        memory_header.setFixedHeight(30)
-        memory_header.setFont(QFont("Segoe UI", 12))
-        memory_header.setStyleSheet(
-            "background-color: #5C2D91; color: white; border: none;"
-        )
-        memory_header.setAlignment(Qt.AlignCenter)
+        memory_header = Header("MEMORY")
         right_panel.addWidget(memory_header)
 
         # Memory Search Bar
@@ -1318,17 +1309,6 @@ END
         self.registers_grid.addWidget(label, row, col, rowspan, colspan)
         self.register_labels[name] = label
 
-    def add_flag(self, name, row):
-        """Add a flag display to the UI"""
-        label = QLabel(f"{name}: 0")
-        label.setFont(QFont("Consolas", 12))
-        label.setStyleSheet(
-            "background-color: #FFFFFF; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;"
-        )
-        label.setAlignment(Qt.AlignCenter)
-        self.flags_grid.addWidget(label, row, 0)
-        self.flag_labels[name] = label
-
     def update_registers_display(self):
         """Update register display from processor state"""
         for reg, value in self.processor.registers.items():
@@ -1340,16 +1320,14 @@ END
                     hex_value = f"{value:02X}H"
                 self.register_labels[reg].setText(f"{reg}: {hex_value}")
 
+        # Update flags display from processor state
+        self.flags_group.update_display()
+        self.stack.update_display()
+
         # Update PSW display - combining A register and flags
         if "PSW" in self.register_labels:
             psw_value = self.processor.get_psw()
             self.register_labels["PSW"].setText(f"PSW: {psw_value:04X}H")
-
-    def update_flags_display(self):
-        """Update flags display from processor state"""
-        for flag, value in self.processor.flags.items():
-            if flag in self.flag_labels:
-                self.flag_labels[flag].setText(f"{flag}: {value}")
 
     def start_fast_execution(self):
         """Start continuous execution mode without code highlighting for better performance"""
@@ -1515,7 +1493,6 @@ END
 
             # Update UI
             self.update_registers_display()
-            self.update_flags_display()
             self.code_editor.updateLineNumberAreaWidth(0)
             # By setting the text to ORG address we are allowing the user to
             # switch between Follow PC or ORG easily
@@ -1619,7 +1596,6 @@ END
 
         # Update UI components
         self.update_registers_display()
-        self.update_flags_display()
         self.update_memory_view()
 
         # Check execution status
@@ -1966,7 +1942,6 @@ END
 
         # Reset UI elements
         self.update_registers_display()
-        self.update_flags_display()
         self.load_memory_display(0x0000)
         self.memory_search.setText("")
 
@@ -2340,6 +2315,83 @@ END
                 )
 
         self.setWindowTitle(title)
+
+
+class Flags(QWidget):
+    def __init__(self, simulator: Simulator):
+        super().__init__()
+        self.simulator = simulator
+        vbox_layout = QVBoxLayout()
+        vbox_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vbox_layout.setContentsMargins(0, 0, 0, 0)
+        vbox_layout.setSpacing(0)
+        self.setLayout(vbox_layout)
+        self.header = Label(f"Flags")
+        self.header.setFont(QFont("Consolas", 12))
+        self.header.setStyleSheet(
+            "background-color: white; color: #1E1E1E; border: 1px solid #DDDDDD;"
+        )
+        self.header.setAlignment(Qt.AlignCenter)
+        vbox_layout.addWidget(self.header)
+        hbox_layout = QHBoxLayout()
+        hbox_layout.setContentsMargins(0, 0, 0, 0)
+        hbox_layout.setSpacing(0)
+        self.flags: dict[str, Label] = {"S": None, "Z": None, "X5": None, "AC": None, " ": None, "X3": None, "P": None, "X1": None, "C": None}
+        for flag in self.flags:
+            self.flags[flag] = Label(flag)
+            if flag != " ":
+                self.flags[flag].setStyleSheet(f"background-color: black; color: {"lightgreen" if flag == "X1" else "grey" }; border: 1px solid #DDDDDD;")
+            hbox_layout.addWidget(self.flags[flag])
+        vbox_layout.addLayout(hbox_layout)
+
+    def update_display(self):
+        """Update flags display from processor state"""
+        if self.simulator is None:
+            return
+        flags_byte = self.simulator.processor.get_flags_byte()
+        self.header.setText(f"Flags (bin): {(flags_byte >> 4) & 0xF:04b} {flags_byte & 0xF:04b}")
+        for flag, value in self.simulator.processor.flags.items():
+            if flag in self.flags:
+                self.flags[flag].setStyleSheet(f"background-color: black; color: {"lightgreen" if value == 1 else "grey" }; border: 1px solid #DDDDDD;")
+                self.flags[flag].update()
+
+
+class Stack(QGridLayout):
+    """Layout for stack"""
+    def __init__(self, simulator: Simulator):
+        super().__init__()
+        self.simulator = simulator
+        self.header = Header("STACK")
+        self.addWidget(self.header, 0, 0, 1, 2)
+        self.mem_locations: list[Label] = []
+        for i in range(16):
+            label = Label(f"Stack {i}")
+            label.setStyleSheet(
+                "background-color: white; color: #1E1E1E; padding: 5px; border: 1px solid #DDDDDD;"
+            )
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.mem_locations.append(label)
+            self.addWidget(self.mem_locations[i], (i / 2) + 1, i % 2)
+
+    def update_display(self):
+        """Update stack display from processor state"""
+        if self.simulator is None:
+            return
+        sp = self.simulator.processor.registers["SP"]
+        for i in range(8):
+            addr = sp + i * 2
+            addr_label = f"[{addr:04X}H]"
+            if addr == 0xFFFF:
+                value = "..00H"
+            elif addr > 0xFFFF:
+                addr_label = "[....H]"
+                value = "....H"
+            else:
+                lsb = self.simulator.processor.memory[addr]
+                msb = self.simulator.processor.memory[addr + 1]
+                value = f"{msb:02X}{lsb:02X}H"
+            self.mem_locations[i * 2].setText(addr_label)
+            self.mem_locations[i * 2 + 1].setText(value)
 
 
 class MemoryTableWidget(QTableWidget):

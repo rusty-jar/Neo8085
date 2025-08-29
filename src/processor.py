@@ -84,18 +84,23 @@ class Processor8085:
 
     def get_psw(self):
         """
-        Returns the Program Status Word (PSW) - 16-bit value combining A register and flags.
+        Returns the Program Status Word (PSW) - 16-bit value combining A register and flags byte.
+        """
+        return (self.registers["A"] << 8) | self.get_flags_byte()
+
+    def get_flags_byte(self):
+        """
+        Returns the flags byte.
         The flags byte has bits: S (7), Z (6), 0 (5), AC (4), 0 (3), P (2), 1 (1), C (0)
         """
-        flags_byte = (
+        return (
             (self.flags["S"] << 7)
             | (self.flags["Z"] << 6)
             | (self.flags["AC"] << 4)
             | (self.flags["P"] << 2)
-            | (1 << 1)  # Bit 1 is always set in 8085
+            | (1 << 1) # Bit 1 is always set in 8085
             | self.flags["C"]
         )
-        return (self.registers["A"] << 8) | flags_byte
 
     def update_flags(
         self, result, check_carry=False, carry_value=None, check_ac=False, ac_value=None
