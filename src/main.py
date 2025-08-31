@@ -908,12 +908,37 @@ class Simulator(QWidget):
         log_layout.setContentsMargins(0, 0, 0, 0)
         log_layout.setSpacing(0)
 
-        log_header = Header("EXECUTION LOG")
-        log_layout.addWidget(log_header)
+        log_header_layout = QHBoxLayout()
+        log_header_layout.setContentsMargins(0, 0, 0, 0)
+        log_header_layout.setSpacing(0)
 
+        log_header = Header("EXECUTION LOG")
+        log_header_layout.addWidget(log_header, 9)
+
+        self.clear_log_button = PushButton("Clear")
+        self.clear_log_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #8D56CA;
+                color: white;
+                border: 2px solid #D3BEEB;
+                padding: 6px;
+            }
+            QPushButton:hover {
+                background-color: #5C2D91;
+                border: 2px solid #8D56CA;
+            }
+        """
+        )
+        log_header_layout.addWidget(self.clear_log_button, 1)
+        self.clear_log_button.clicked.connect(self.clear_execution_log)
+
+        log_layout.addLayout(log_header_layout)
+        
         # Execution log widget
         self.execution_log_widget = TextEdit()
         self.execution_log_widget.setReadOnly(True)
+        self.execution_log_widget.clear()
 
         self.execution_log_widget.setStyleSheet(
             """
@@ -1828,6 +1853,11 @@ END
         self.execution_log_widget.verticalScrollBar().setValue(
             self.execution_log_widget.verticalScrollBar().maximum()
         )
+
+    def clear_execution_log(self):
+        """Clear execution log"""
+        self.execution_log.clear()
+        self.execution_log_widget.clear()
 
     def show_editor_context_menu(self, pos):
         """Show context menu for the code editor"""
