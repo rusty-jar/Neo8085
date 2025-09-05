@@ -84,18 +84,23 @@ class Processor8085:
 
     def get_psw(self):
         """
-        Returns the Program Status Word (PSW) - 16-bit value combining A register and flags.
+        Returns the Program Status Word (PSW) - 16-bit value combining A register and flags byte.
+        """
+        return (self.registers["A"] << 8) | self.get_flags_byte()
+
+    def get_flags_byte(self):
+        """
+        Returns the flags byte.
         The flags byte has bits: S (7), Z (6), 0 (5), AC (4), 0 (3), P (2), 1 (1), C (0)
         """
-        flags_byte = (
+        return (
             (self.flags["S"] << 7)
             | (self.flags["Z"] << 6)
             | (self.flags["AC"] << 4)
             | (self.flags["P"] << 2)
-            | (1 << 1)  # Bit 1 is always set in 8085
+            | (1 << 1) # Bit 1 is always set in 8085
             | self.flags["C"]
         )
-        return (self.registers["A"] << 8) | flags_byte
 
     def update_flags(
         self, result, check_carry=False, carry_value=None, check_ac=False, ac_value=None
@@ -197,12 +202,11 @@ class Processor8085:
             # Data transfer instructions
             elif opcode == "MVI":
                 reg = instruction[1].strip(",")
-                value = self._parse_number(instruction[2])
-                if reg in self.registers:
-                    self.registers[reg] = value & 0xFF
+                value = self._parse_number(instruction[2]) & 0xFF
+                if reg == "M":
+                    self.memory[self.get_hl_addr()] = value
                 else:
-                    self.error = f"Invalid register: {reg}"
-                    return "ERROR"
+                    self.registers[reg] = value
                 self.registers["PC"] += 2
 
             elif opcode == "MOV":
@@ -257,21 +261,17 @@ class Processor8085:
             # Arithmetic instructions
             elif opcode == "ADD":
                 reg = instruction[1].strip(",;")
-                if reg in self.registers:
-                    a_value = self.registers["A"]
-                    operand = self.registers[reg]
+                a_value = self.registers["A"]
+                operand = self.memory[self.get_hl_addr()] if reg == "M" else self.registers[reg]
 
-                    # Calculate auxiliary carry (carry from bit 3 to bit 4)
-                    ac = 1 if ((a_value & 0x0F) + (operand & 0x0F)) > 0x0F else 0
+                # Calculate auxiliary carry (carry from bit 3 to bit 4)
+                ac = 1 if ((a_value & 0x0F) + (operand & 0x0F)) > 0x0F else 0
 
-                    result = a_value + operand
-                    carry = 1 if result > 0xFF else 0
+                result = a_value + operand
+                carry = 1 if result > 0xFF else 0
 
-                    self.registers["A"] = result & 0xFF
-                    self.update_flags(self.registers["A"], True, carry, True, ac)
-                else:
-                    self.error = f"Invalid register: {reg}"
-                    return "ERROR"
+                self.registers["A"] = result & 0xFF
+                self.update_flags(self.registers["A"], True, carry, True, ac)
                 self.registers["PC"] += 1
 
             elif opcode == "ADI":
@@ -290,41 +290,39 @@ class Processor8085:
 
             elif opcode == "SUB":
                 reg = instruction[1].strip(",;")
-                if reg in self.registers:
-                    a_value = self.registers["A"]
-                    operand = self.registers[reg]
+                a_value = self.registers["A"]
+                operand = self.memory[self.get_hl_addr()] if reg == "M" else self.registers[reg]
 
-                    # Calculate auxiliary carry for subtraction
-                    ac = 1 if (a_value & 0x0F) < (operand & 0x0F) else 0
+                # Calculate auxiliary carry for subtraction
+                ac = 1 if (a_value & 0x0F) < (operand & 0x0F) else 0
 
-                    result = a_value - operand
-                    carry = 1 if result < 0 else 0
+                result = a_value - operand
+                carry = 1 if result < 0 else 0
 
-                    self.registers["A"] = result & 0xFF
-                    self.update_flags(self.registers["A"], True, carry, True, ac)
-                else:
-                    self.error = f"Invalid register: {reg}"
-                    return "ERROR"
+                self.registers["A"] = result & 0xFF
+                self.update_flags(self.registers["A"], True, carry, True, ac)
                 self.registers["PC"] += 1
 
             elif opcode == "INR":
                 reg = instruction[1]
-                if reg in self.registers:
+                if reg == "M":
+                    hl_addr = self.get_hl_addr()
+                    self.memory[hl_addr] = (self.memory[hl_addr] + 1) & 0xFF
+                    self.update_flags(self.memory[hl_addr])
+                else:
                     self.registers[reg] = (self.registers[reg] + 1) & 0xFF
                     self.update_flags(self.registers[reg])
-                else:
-                    self.error = f"Invalid register: {reg}"
-                    return "ERROR"
                 self.registers["PC"] += 1
 
             elif opcode == "DCR":
                 reg = instruction[1]
-                if reg in self.registers:
+                if reg == "M":
+                    hl_addr = self.get_hl_addr()
+                    self.memory[hl_addr] = (self.memory[hl_addr] - 1) & 0xFF
+                    self.update_flags(self.memory[hl_addr])
+                else:
                     self.registers[reg] = (self.registers[reg] - 1) & 0xFF
                     self.update_flags(self.registers[reg])
-                else:
-                    self.error = f"Invalid register: {reg}"
-                    return "ERROR"
                 self.registers["PC"] += 1
 
             # Branching instructions
