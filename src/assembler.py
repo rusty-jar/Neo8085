@@ -1,5 +1,5 @@
 # Neo8085 - 8085 Microprocessor Simulator
-# Copyright (C) 2025 Shahibur Rahaman
+# Copyright (C) 2026 Shahibur Rahaman
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -116,8 +116,15 @@ class Assembler8085:
             "RST",
             "CMP",
             "NOP",
+            "SUI",
+            "IN",
+            "OUT",
+            "EI",
+            "DI",
+            "RIM",
+            "SIM",
         ]
-        self.valid_registers = ["A", "B", "C", "D", "E", "H", "L", "M"]
+        self.valid_registers = ["B", "C", "D", "E", "H", "L", "M", "A"]
         self.valid_register_pairs = ["B", "D", "H", "SP"]
 
     def assemble(self, code):
@@ -160,6 +167,9 @@ class Assembler8085:
 
         # First pass: Find labels and validate syntax
         self._first_pass(code, output)
+
+        # Resolve any EQU directives that depend on labels from first pass
+        self._resolve_pending_equs(code, output)
 
         # Second pass: Build program, resolve labels, and generate machine code
         self._second_pass(code, output)
@@ -207,13 +217,47 @@ class Assembler8085:
 
             if not progress and remaining:
                 # Could not make progress in resolving symbols
-                # This indicates circular references or undefined symbols
+                # Save unresolved EQUs for later resolution after first pass
+                self._pending_equs = remaining
+                return
+
+            equ_definitions = remaining
+
+        self._pending_equs = []
+
+    def _resolve_pending_equs(self, code, output):
+        """
+        Resolve EQU directives that depend on labels discovered during the first pass.
+        Called after _first_pass when all labels (from DS, code positions, etc.) are known.
+        """
+        if not hasattr(self, '_pending_equs') or not self._pending_equs:
+            return
+
+        equ_definitions = self._pending_equs
+
+        while equ_definitions:
+            progress = False
+            remaining = []
+
+            for symbol, value_expr, line_num in equ_definitions:
+                # Try to evaluate — now labels from first pass are available in output.labels
+                value = self._evaluate_expression(value_expr, output, line_num)
+
+                if value is not None:
+                    output.symbols[symbol] = value & 0xFFFF
+                    progress = True
+                else:
+                    remaining.append((symbol, value_expr, line_num))
+
+            if not progress and remaining:
                 unresolved = [s for s, _, _ in remaining]
                 raise SyntaxError(
                     f"Could not resolve EQU symbols: {', '.join(unresolved)}"
                 )
 
             equ_definitions = remaining
+
+        self._pending_equs = []
 
     def _evaluate_expression(self, expr, output, line_num):
         """
@@ -341,9 +385,13 @@ class Assembler8085:
         """
         value_str = value_str.strip()
 
-        # Check if it's a symbol
+        # Check if it's a symbol (EQU-defined)
         if value_str in output.symbols:
             return output.symbols[value_str]
+
+        # Check if it's a label (from first pass)
+        if value_str in output.labels:
+            return output.labels[value_str]
 
         # Otherwise try to parse as a number
         try:
@@ -575,6 +623,12 @@ class Assembler8085:
                 address += 1
             elif instruction == "NOP":  # 1 byte (no operands)
                 address += 1
+            elif instruction == "SUI":  # 2 bytes (opcode + immediate)
+                address += 2
+            elif instruction in ["IN", "OUT"]:  # 2 bytes (opcode + port)
+                address += 2
+            elif instruction in ["EI", "DI", "RIM", "SIM"]:  # 1 byte
+                address += 1
 
     def _resolve_symbol_or_number(self, value_str, output):
         """
@@ -710,6 +764,12 @@ class Assembler8085:
                 # Register codes: B=0, C=1, D=2, E=3, H=4, L=5, M=6, A=7
                 dest_reg = tokens[1].strip(",")
                 src_reg = tokens[2].strip(",;")
+
+                # MOV M,M is invalid - opcode 0x76 is HLT
+                if dest_reg == "M" and src_reg == "M":
+                    raise SyntaxError(
+                        f"Line {line_num}: MOV M,M is not a valid instruction (opcode 0x76 is HLT)"
+                    )
 
                 try:
                     dest_code = self._get_reg_code(dest_reg)
@@ -1272,6 +1332,55 @@ class Assembler8085:
 
             elif opcode == "NOP":  # NOP (1 byte: opcode=0x00)
                 output.memory[address] = 0x00
+                address += 1
+
+            elif opcode == "SUI":  # SUI data (2 bytes: opcode=0xD6, immediate value)
+                value_str = tokens[1].strip(",;")
+                try:
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFF
+                    output.memory[address] = 0xD6
+                    output.memory[address + 1] = value
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                output.program_memory_range.add(address + 1)
+                address += 2
+
+            elif opcode == "IN":  # IN port (2 bytes: opcode=0xDB, port address)
+                value_str = tokens[1].strip(",;")
+                try:
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFF
+                    output.memory[address] = 0xDB
+                    output.memory[address + 1] = value
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                output.program_memory_range.add(address + 1)
+                address += 2
+
+            elif opcode == "OUT":  # OUT port (2 bytes: opcode=0xD3, port address)
+                value_str = tokens[1].strip(",;")
+                try:
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFF
+                    output.memory[address] = 0xD3
+                    output.memory[address + 1] = value
+                except ValueError as e:
+                    raise SyntaxError(f"Line {line_num}: {str(e)}")
+                output.program_memory_range.add(address + 1)
+                address += 2
+
+            elif opcode == "EI":  # EI (1 byte: opcode=0xFB)
+                output.memory[address] = 0xFB
+                address += 1
+
+            elif opcode == "DI":  # DI (1 byte: opcode=0xF3)
+                output.memory[address] = 0xF3
+                address += 1
+
+            elif opcode == "RIM":  # RIM (1 byte: opcode=0x20)
+                output.memory[address] = 0x20
+                address += 1
+
+            elif opcode == "SIM":  # SIM (1 byte: opcode=0x30)
+                output.memory[address] = 0x30
                 address += 1
 
         # Update program metadata after assembly

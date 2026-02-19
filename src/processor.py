@@ -1,5 +1,5 @@
 # Neo8085 - 8085 Microprocessor Simulator
-# Copyright (C) 2025 Shahibur Rahaman
+# Copyright (C) 2026 Shahibur Rahaman
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@ class Processor8085:
         }
         self.flags = {"S": 0, "Z": 0, "AC": 0, "P": 0, "C": 0}
         self.memory = bytearray(0x10000)  # 64KB memory space
+        self.io_ports = bytearray(0x100)  # 256 I/O ports
         self.halted = False
         self.error = None
         self.last_instruction = None
@@ -307,42 +308,34 @@ class Processor8085:
                 reg = instruction[1]
                 if reg == "M":
                     hl_addr = self.get_hl_addr()
-                    self.memory[hl_addr] = (self.memory[hl_addr] + 1) & 0xFF
-                    self.update_flags(self.memory[hl_addr])
+                    old_val = self.memory[hl_addr]
+                    # AC=1 when lower nibble overflows (0x0F + 1 carries into bit 4)
+                    ac = 1 if (old_val & 0x0F) == 0x0F else 0
+                    self.memory[hl_addr] = (old_val + 1) & 0xFF
+                    self.update_flags(self.memory[hl_addr], False, None, True, ac)
                 else:
-                    self.registers[reg] = (self.registers[reg] + 1) & 0xFF
-                    self.update_flags(self.registers[reg])
+                    old_val = self.registers[reg]
+                    ac = 1 if (old_val & 0x0F) == 0x0F else 0
+                    self.registers[reg] = (old_val + 1) & 0xFF
+                    self.update_flags(self.registers[reg], False, None, True, ac)
                 self.registers["PC"] += 1
 
             elif opcode == "DCR":
                 reg = instruction[1]
                 if reg == "M":
                     hl_addr = self.get_hl_addr()
-                    self.memory[hl_addr] = (self.memory[hl_addr] - 1) & 0xFF
-                    self.update_flags(self.memory[hl_addr])
+                    old_val = self.memory[hl_addr]
+                    self.memory[hl_addr] = (old_val - 1) & 0xFF
+                    # AC=0 when lower nibble is 0x00 (borrow from bit 4 occurs)
+                    # AC=1 when lower nibble is non-zero (no borrow)
+                    ac = 0 if (old_val & 0x0F) == 0x00 else 1
+                    self.update_flags(self.memory[hl_addr], False, None, True, ac)
                 else:
-                    self.registers[reg] = (self.registers[reg] - 1) & 0xFF
-                    self.update_flags(self.registers[reg])
+                    old_val = self.registers[reg]
+                    self.registers[reg] = (old_val - 1) & 0xFF
+                    ac = 0 if (old_val & 0x0F) == 0x00 else 1
+                    self.update_flags(self.registers[reg], False, None, True, ac)
                 self.registers["PC"] += 1
-
-            # Branching instructions
-            elif opcode == "JMP":
-                addr = self._parse_number(instruction[1])
-                self.registers["PC"] = addr & 0xFFFF
-
-            elif opcode == "JZ":
-                addr = self._parse_number(instruction[1])
-                if self.flags["Z"] == 1:
-                    self.registers["PC"] = addr & 0xFFFF
-                else:
-                    self.registers["PC"] += 3
-
-            elif opcode == "JNZ":
-                addr = self._parse_number(instruction[1])
-                if self.flags["Z"] == 0:
-                    self.registers["PC"] = addr & 0xFFFF
-                else:
-                    self.registers["PC"] += 3
 
             elif opcode == "HLT":
                 self.halted = True
@@ -598,26 +591,18 @@ class Processor8085:
 
                 self.registers["PC"] += 1
 
-            elif opcode == "LHLD":  # LHLD addr (3 bytes): Load H-L direct
-                addr = self._parse_number(instruction[1])
-
-                # Load L from memory[addr]
+            elif opcode == "LHLD":  # LHLD addr (3 bytes): Load H-L from memory
+                addr = self._parse_number(instruction[1]) & 0xFFFF
+                addr_plus_1 = (addr + 1) & 0xFFFF
                 self.registers["L"] = self.memory[addr]
-
-                # Load H from memory[addr+1]
-                self.registers["H"] = self.memory[addr + 1]
-
+                self.registers["H"] = self.memory[addr_plus_1]
                 self.registers["PC"] += 3
 
-            elif opcode == "SHLD":  # SHLD addr (3 bytes): Store H-L direct
-                addr = self._parse_number(instruction[1])
-
-                # Store L to memory[addr]
+            elif opcode == "SHLD":  # SHLD addr (3 bytes): Store H-L to memory
+                addr = self._parse_number(instruction[1]) & 0xFFFF
+                addr_plus_1 = (addr + 1) & 0xFFFF
                 self.memory[addr] = self.registers["L"]
-
-                # Store H to memory[addr+1]
-                self.memory[addr + 1] = self.registers["H"]
-
+                self.memory[addr_plus_1] = self.registers["H"]
                 self.registers["PC"] += 3
 
             elif opcode == "PCHL":  # PCHL (1 byte): Load PC from H-L
@@ -635,22 +620,18 @@ class Processor8085:
                 self.registers["PC"] += 1
 
             elif opcode == "XTHL":  # XTHL (1 byte): Exchange top of stack with H-L
-                # Get current HL value
+                sp_addr = self.registers["SP"]
+                sp_plus_1 = (sp_addr + 1) & 0xFFFF
+
+                # Save current values
                 h_val = self.registers["H"]
                 l_val = self.registers["L"]
 
-                # Get address of stack top
-                sp_addr = self.registers["SP"]
-
-                # Exchange L with memory[SP]
-                temp_l = self.memory[sp_addr]
+                # Exchange: L <-> (SP), H <-> (SP+1)
+                self.registers["L"] = self.memory[sp_addr]
+                self.registers["H"] = self.memory[sp_plus_1]
                 self.memory[sp_addr] = l_val
-                self.registers["L"] = temp_l
-
-                # Exchange H with memory[SP+1]
-                temp_h = self.memory[sp_addr + 1]
-                self.memory[sp_addr + 1] = h_val
-                self.registers["H"] = temp_h
+                self.memory[sp_plus_1] = h_val
 
                 self.registers["PC"] += 1
 
@@ -676,13 +657,14 @@ class Processor8085:
                 self.registers["PC"] += 1
 
             elif opcode == "ANI":  # ANI data (2 bytes): AND immediate with A
-                value = self._parse_number(instruction[1])
+                value = self._parse_number(instruction[1]) & 0xFF
 
                 # Perform AND operation
                 result = self.registers["A"] & value
                 self.registers["A"] = result
 
-                # Update flags: S, Z, P, CY=0, AC=1
+                # Update flags: S, Z, P affected; CY=0, AC=1
+                # 8085 sets AC=1 for both ANA and ANI (unlike 8080 which clears AC for ANI)
                 self.update_flags(result)
                 self.flags["C"] = 0
                 self.flags["AC"] = 1
@@ -693,38 +675,32 @@ class Processor8085:
                 reg = instruction[1].strip(",;")
 
                 if reg == "M":
-                    # Memory addressed by HL
                     value = self.memory[self.get_hl_addr()]
                 else:
-                    # Register
                     value = self.registers[reg]
 
-                # Perform OR operation
                 result = self.registers["A"] | value
                 self.registers["A"] = result
 
-                # Update flags: S, Z, P, CY=0, AC=0
+                # S, Z, P set normally; CY=0, AC=0
                 self.update_flags(result)
                 self.flags["C"] = 0
                 self.flags["AC"] = 0
-                # Invert parity flag for OR operation to match 8085 behavior
-                self.flags["P"] = 1 if self.flags["P"] == 0 else 0
+                # Do NOT invert parity — ORA sets parity normally (even parity = 1)
 
                 self.registers["PC"] += 1
 
             elif opcode == "ORI":  # ORI data (2 bytes): OR immediate with A
-                value = self._parse_number(instruction[1])
+                value = self._parse_number(instruction[1]) & 0xFF
 
-                # Perform OR operation
                 result = self.registers["A"] | value
                 self.registers["A"] = result
 
-                # Update flags: S, Z, P, CY=0, AC=0
+                # S, Z, P set normally; CY=0, AC=0
                 self.update_flags(result)
                 self.flags["C"] = 0
                 self.flags["AC"] = 0
-                # Invert parity flag for OR operation to match 8085 behavior
-                self.flags["P"] = 1 if self.flags["P"] == 0 else 0
+                # Do NOT invert parity — ORI sets parity normally (even parity = 1)
 
                 self.registers["PC"] += 2
 
@@ -732,13 +708,10 @@ class Processor8085:
                 reg = instruction[1].strip(",;")
 
                 if reg == "M":
-                    # Memory addressed by HL
                     value = self.memory[self.get_hl_addr()]
                 else:
-                    # Register
                     value = self.registers[reg]
 
-                # Perform XOR operation
                 result = self.registers["A"] ^ value
                 self.registers["A"] = result
 
@@ -750,9 +723,8 @@ class Processor8085:
                 self.registers["PC"] += 1
 
             elif opcode == "XRI":  # XRI data (2 bytes): XOR immediate with A
-                value = self._parse_number(instruction[1])
+                value = self._parse_number(instruction[1]) & 0xFF
 
-                # Perform XOR operation
                 result = self.registers["A"] ^ value
                 self.registers["A"] = result
 
@@ -1157,6 +1129,47 @@ class Processor8085:
 
             elif opcode == "NOP":  # NOP (1 byte): No operation
                 # No operation - just increment the program counter
+                self.registers["PC"] += 1
+
+            elif opcode == "SUI":  # SUI data (2 bytes): Subtract immediate from A
+                value = self._parse_number(instruction[1].strip(",;")) & 0xFF
+                a_value = self.registers["A"]
+
+                # Calculate auxiliary carry for subtraction
+                ac = 1 if (a_value & 0x0F) < (value & 0x0F) else 0
+
+                result = a_value - value
+                carry = 1 if result < 0 else 0
+
+                self.registers["A"] = result & 0xFF
+                self.update_flags(self.registers["A"], True, carry, True, ac)
+                self.registers["PC"] += 2
+
+            elif opcode == "IN":  # IN port (2 bytes): Input from port
+                port = self._parse_number(instruction[1].strip(",;")) & 0xFF
+                self.registers["A"] = self.io_ports[port]
+                self.registers["PC"] += 2
+
+            elif opcode == "OUT":  # OUT port (2 bytes): Output to port
+                port = self._parse_number(instruction[1].strip(",;")) & 0xFF
+                self.io_ports[port] = self.registers["A"]
+                self.registers["PC"] += 2
+
+            elif opcode == "EI":  # EI (1 byte): Enable interrupts
+                # Simulator doesn't model interrupts, treat as NOP
+                self.registers["PC"] += 1
+
+            elif opcode == "DI":  # DI (1 byte): Disable interrupts
+                # Simulator doesn't model interrupts, treat as NOP
+                self.registers["PC"] += 1
+
+            elif opcode == "RIM":  # RIM (1 byte): Read interrupt mask
+                # Simulator doesn't model interrupt mask; loads 0 into A
+                self.registers["A"] = 0x00
+                self.registers["PC"] += 1
+
+            elif opcode == "SIM":  # SIM (1 byte): Set interrupt mask
+                # Simulator doesn't model interrupt mask; treat as NOP
                 self.registers["PC"] += 1
 
             else:

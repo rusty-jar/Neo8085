@@ -4,13 +4,13 @@
 # - MAJOR: incompatible API changes
 # - MINOR: new functionality, backwards-compatible
 # - PATCH: bug fixes, backwards-compatible
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # Release status: 'alpha', 'beta', 'rc', or 'final'
 __release_status__ = "final"
 
 # Build date in YYYYMMDD format
-__build_date__ = "20250905"
+__build_date__ = "20260219"
 
 # Build number for multiple releases on same day
 __build_number__ = 1

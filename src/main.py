@@ -1,5 +1,5 @@
 # Neo8085 - 8085 Microprocessor Simulator
-# Copyright (C) 2025 Shahibur Rahaman
+# Copyright (C) 2026 Shahibur Rahaman
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -371,6 +371,13 @@ class AssemblyHighlighter(QSyntaxHighlighter):
             "RST",
             "CMP",
             "NOP",
+            "SUI",
+            "IN",
+            "OUT",
+            "EI",
+            "DI",
+            "RIM",
+            "SIM",
         ]
 
         # Assembler directives
@@ -1267,7 +1274,7 @@ class Simulator(QWidget):
 ;
 ; Version: {display_version}
 ;
-; Copyright 2025 (c) Shahibur Rahaman
+; Copyright 2026 (c) Shahibur Rahaman
 ; Licensed under GNU GPL v3.0
 ;
 ; +==================================================================+
@@ -2031,7 +2038,7 @@ END
             self,
             "About Neo8085",
             f"Neo8085 - 8085 Microprocessor Simulator\n\n"
-            f"Copyright (C) 2025 Shahibur Rahaman\n"
+            f"Copyright (C) 2026 Shahibur Rahaman\n"
             f"Licensed under the GNU General Public License v3.0\n\n"
             f"A simulator for the 8085 microprocessor.\n"
             f"Version: {version_string}\n\n"
