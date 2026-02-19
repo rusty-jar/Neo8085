@@ -26,7 +26,8 @@ class AssemblyOutput:
         self.labels = {}
         self.symbols = {}  # Store EQU symbol definitions
         self.program_end_address = 0
-        self.program_memory_range = set()
+        self.program_memory_range = set()  # Code addresses (protected)
+        self.data_memory_range = set()  # DS addresses (writable)
         self.starting_address = 0x0000
 
 
@@ -148,6 +149,7 @@ class Assembler8085:
                 - symbols: Dictionary of EQU symbol names to their values
                 - program_end_address: End address of the assembled program
                 - program_memory_range: Set of addresses containing program code
+                - data_memory_range: Set of addresses containing data
                 - starting_address: Beginning address of the program
 
         Raises:
@@ -488,25 +490,41 @@ class Assembler8085:
 
             # Handle DS (Define Storage) directive
             if instruction == "DS":
-                instruction_index = 1 if parts[0].endswith(":") else 0
+                # Adjust for tokens layout based on label presence
+                instruction_index = 0
+                if parts[0].endswith(":"):
+                    instruction_index = 1
                 size_index = instruction_index + 1
 
                 if len(parts) <= size_index:
                     raise SyntaxError(f"Line {line_num}: DS requires a size")
 
                 try:
-                    size_arg = parts[size_index]
-                    # Check if it's a symbol first
-                    if size_arg in output.symbols:
-                        size = output.symbols[size_arg]
-                    else:
-                        size = self._parse_number(size_arg)
-                    address += size
-                except ValueError:
-                    raise SyntaxError(
-                        f"Line {line_num}: Invalid DS size: {parts[size_index]}"
-                    )
+                    # Join remaining parts as potential expression
+                    size_expr = " ".join(parts[size_index:])
+                    # Remove any trailing comments (already stripped above, but be safe)
+                    size_expr = size_expr.split(";")[0].strip()
 
+                    # Try to resolve as symbol first
+                    if size_expr in output.symbols:
+                        size = output.symbols[size_expr]
+                    else:
+                        # Try evaluate as expression (handles "10 + 5", "CONST * 2", etc.)
+                        result = self._evaluate_expression(size_expr, output, line_num)
+                        if result is not None:
+                            size = result
+                        else:
+                            size = self._parse_number(size_expr)
+
+                    # Mark as data memory (writable), not program memory (protected)
+                    for i in range(size):
+                        output.data_memory_range.add(address + i)
+
+                    address += size
+                except ValueError as e:
+                    raise SyntaxError(
+                        f"Line {line_num}: Invalid DS size: {size_expr}"
+                    )
                 continue  # DS doesn't generate code
 
             # Handle END directive
@@ -632,8 +650,8 @@ class Assembler8085:
 
     def _resolve_symbol_or_number(self, value_str, output):
         """
-        Resolves a value that might be a symbol, label, or numeric literal.
-        Performs hierarchical lookup: first symbols, then labels, then parses as number.
+        Resolves a value that might be a symbol, label, expression, or numeric literal.
+        Performs hierarchical lookup: first symbols, then labels, then expression, then number.
 
         Args:
             value_str (str): The value string to resolve
@@ -655,11 +673,50 @@ class Assembler8085:
         if value_str in output.labels:
             return output.labels[value_str]
 
+        # Check if it contains an arithmetic expression
+        if any(op in value_str for op in ["+", "-", "*", "/", "&", "|", "^", "<<", ">>"]):
+            result = self._evaluate_expression(value_str, output, 0)
+            if result is not None:
+                return result
+
         # Otherwise try to parse as a number
         try:
             return self._parse_number(value_str)
         except ValueError:
             raise ValueError(f"Could not resolve value: {value_str}")
+
+    def _join_expression_tokens(self, tokens):
+        """
+        Rejoin tokens that were split by whitespace but form a single expression.
+        E.g., ["STA", "DATA_AREA", "+", "1"] -> ["STA", "DATA_AREA + 1"]
+        E.g., ["LXI", "SP,", "STACK_AREA", "+", "64"] -> ["LXI", "SP,", "STACK_AREA + 64"]
+        """
+        if len(tokens) <= 2:
+            return tokens
+
+        operators = {"+", "-", "*", "/", "&", "|", "^", "<<", ">>"}
+
+        # Find where the value operand starts
+        # For 2-operand instructions like MVI A, 42H the register is tokens[1] (with
+        # trailing comma) and value starts at tokens[2]
+        # For 1-operand instructions like STA addr, value starts at tokens[1]
+        value_start = 1
+        if len(tokens) > 2 and tokens[1].endswith(","):
+            value_start = 2
+
+        # Check if any token after value_start is an operator
+        has_expression = False
+        for i in range(value_start + 1, len(tokens)):
+            if tokens[i] in operators:
+                has_expression = True
+                break
+
+        if has_expression:
+            # Join everything from value_start onwards into one expression
+            expr = " ".join(tokens[value_start:])
+            return tokens[:value_start] + [expr]
+
+        return tokens
 
     def _second_pass(self, code, output):
         """
@@ -698,6 +755,10 @@ class Assembler8085:
 
             opcode = tokens[0]
 
+            # Join expression tokens split by whitespace
+            # e.g., ["STA", "DATA_AREA", "+", "1"] -> ["STA", "DATA_AREA + 1"]
+            tokens = self._join_expression_tokens(tokens)
+
             # Skip EQU directives
             if opcode == "EQU":
                 continue
@@ -710,25 +771,38 @@ class Assembler8085:
             # Handle DS directive
             if opcode == "DS":
                 # Adjust for tokens layout based on label presence
-                size_index = 2 if len(tokens) > 2 and tokens[0] == "DS" else 1
+                instruction_index = 0
+                if parts[0].endswith(":"):
+                    instruction_index = 1
+                size_index = instruction_index + 1
+
+                if len(parts) <= size_index:
+                    raise SyntaxError(f"Line {line_num}: DS requires a size")
 
                 try:
-                    size_arg = (
-                        tokens[size_index] if size_index < len(tokens) else tokens[1]
-                    )
-                    # Try to resolve as symbol first
-                    if size_arg in output.symbols:
-                        size = output.symbols[size_arg]
-                    else:
-                        size = self._parse_number(size_arg)
+                    # Join remaining parts as potential expression
+                    size_expr = " ".join(parts[size_index:])
+                    # Remove any trailing comments (already stripped above, but be safe)
+                    size_expr = size_expr.split(";")[0].strip()
 
-                    # Mark memory range as allocated but don't generate code
+                    # Try to resolve as symbol first
+                    if size_expr in output.symbols:
+                        size = output.symbols[size_expr]
+                    else:
+                        # Try evaluate as expression (handles "10 + 5", "CONST * 2", etc.)
+                        result = self._evaluate_expression(size_expr, output, line_num)
+                        if result is not None:
+                            size = result
+                        else:
+                            size = self._parse_number(size_expr)
+
+                    # Mark as data memory (writable), not program memory (protected)
                     for i in range(size):
-                        output.program_memory_range.add(address + i)
+                        output.data_memory_range.add(address + i)
 
                     address += size
                 except ValueError as e:
-                    raise SyntaxError(f"Line {line_num}: Invalid DS size: {size_arg}")
+                    raise SyntaxError(f"Line {line_num}: Invalid DS size: {size_expr}")
                 continue
 
             # Handle END directive
@@ -1126,7 +1200,7 @@ class Assembler8085:
             elif opcode == "ANI":  # ANI data (2 bytes): AND immediate with A
                 value_str = tokens[1].strip(",;")
                 try:
-                    value = self._parse_number(value_str) & 0xFF
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFF
                     output.memory[address] = 0xE6  # Opcode
                     output.memory[address + 1] = value  # Immediate data
                 except ValueError as e:
@@ -1147,7 +1221,7 @@ class Assembler8085:
             elif opcode == "ORI":  # ORI data (2 bytes): OR immediate with A
                 value_str = tokens[1].strip(",;")
                 try:
-                    value = self._parse_number(value_str) & 0xFF
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFF
                     output.memory[address] = 0xF6  # Opcode
                     output.memory[address + 1] = value  # Immediate data
                 except ValueError as e:
@@ -1168,7 +1242,7 @@ class Assembler8085:
             elif opcode == "XRI":  # XRI data (2 bytes): XOR immediate with A
                 value_str = tokens[1].strip(",;")
                 try:
-                    value = self._parse_number(value_str) & 0xFF
+                    value = self._resolve_symbol_or_number(value_str, output) & 0xFF
                     output.memory[address] = 0xEE  # Opcode
                     output.memory[address + 1] = value  # Immediate data
                 except ValueError as e:

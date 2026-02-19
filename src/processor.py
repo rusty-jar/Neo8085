@@ -42,6 +42,7 @@ class Processor8085:
         self.last_instruction = None
         self.program_end_address = 0
         self.program_memory_range = set()
+        self.data_memory_range = set()
         self.parsed_program = []
         self.line_to_address_map = {}
         self.address_to_line_map = {}
@@ -64,6 +65,7 @@ class Processor8085:
         self.symbols = assembly_output.symbols
         self.program_end_address = assembly_output.program_end_address
         self.program_memory_range = assembly_output.program_memory_range
+        self.data_memory_range = assembly_output.data_memory_range
 
         # Set processor state for execution
         self.registers["PC"] = assembly_output.starting_address
@@ -1202,6 +1204,7 @@ class Processor8085:
         Parses a number according to 8085 conventions:
         - Symbol lookup from defined symbols table
         - Label lookup from defined labels
+        - Expression evaluation (e.g., LABEL + 5)
         - Hexadecimal if string ends with 'H'
         - Decimal otherwise
         """
@@ -1215,12 +1218,76 @@ class Processor8085:
         if hasattr(self, "labels") and value_str in self.labels:
             return self.labels[value_str]
 
+        # Check if it contains an arithmetic expression
+        if any(op in value_str for op in ["+", "-", "*", "/"]):
+            result = self._evaluate_expression(value_str)
+            if result is not None:
+                return result
+
         # Otherwise, parse as number
         if value_str.upper().endswith("H"):
             return int(value_str[:-1], 16)
         else:
             return int(value_str, 10)
 
+    def _evaluate_expression(self, expr):
+        """Evaluate simple arithmetic expressions with symbols/labels."""
+        operators = ["+", "-", "*", "/"]
+        tokens = []
+        current = ""
+        for ch in expr:
+            if ch == " ":
+                if current:
+                    tokens.append(current)
+                    current = ""
+            elif ch in operators:
+                if current:
+                    tokens.append(current)
+                    current = ""
+                tokens.append(ch)
+            else:
+                current += ch
+        if current:
+            tokens.append(current)
+
+        if len(tokens) < 3:
+            return None
+
+        result = self._resolve_token(tokens[0])
+        if result is None:
+            return None
+
+        for i in range(1, len(tokens), 2):
+            if i + 1 >= len(tokens):
+                break
+            op = tokens[i]
+            operand = self._resolve_token(tokens[i + 1])
+            if operand is None:
+                return None
+            if op == "+":
+                result += operand
+            elif op == "-":
+                result -= operand
+            elif op == "*":
+                result *= operand
+            elif op == "/":
+                result //= operand
+        return result
+
+    def _resolve_token(self, token):
+        """Resolve a single token to a numeric value."""
+        token = token.strip()
+        if hasattr(self, "symbols") and token in self.symbols:
+            return self.symbols[token]
+        if hasattr(self, "labels") and token in self.labels:
+            return self.labels[token]
+        try:
+            if token.upper().endswith("H"):
+                return int(token[:-1], 16)
+            return int(token, 10)
+        except ValueError:
+            return None
+
     def is_program_memory(self, address):
-        """Returns True if the address contains program code"""
-        return address in self.program_memory_range
+        """Returns True if the address contains program code (not data)"""
+        return address in self.program_memory_range and address not in self.data_memory_range

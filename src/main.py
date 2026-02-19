@@ -2334,8 +2334,10 @@ END
             if hasattr(
                     self.processor, "is_program_memory"
             ) and self.processor.is_program_memory(address):
+                start_addr = min(self.processor.program_memory_range) if self.processor.program_memory_range else 0
+                end_addr = max(self.processor.program_memory_range) if self.processor.program_memory_range else 0
                 self.add_to_log(
-                    f"Cannot modify program memory at {address:04X}H (0-{self.processor.program_end_address - 1:04X}H)",
+                    f"Cannot modify program memory at {address:04X}H ({start_addr:04X}H-{end_addr:04X}H)",
                     "ERROR",
                 )
                 self.memory_addr_input.selectAll()  # Select the address text for easy correction
