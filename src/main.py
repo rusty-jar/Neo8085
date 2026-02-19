@@ -21,6 +21,13 @@
 import os
 import sys
 
+def resource_path(relative_path):
+    """Get absolute path to resource"""
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
+
 # Third-party imports
 from PySide6.QtCore import (
     QDateTime,
@@ -2612,10 +2619,11 @@ class MemoryTableWidget(ZoomMixin, QTableWidget):
 
 def main():
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon("8085-logo.ico"))
+    app.setWindowIcon(QIcon(resource_path("8085-logo.ico")))
 
     # Show splash screen
-    splash_pix = QPixmap("8085-splash-screen.png")
+    splash_pix = QPixmap(resource_path("8085-splash-screen.png"))
+    
     if not splash_pix.isNull():
         splash = QSplashScreen(splash_pix, Qt.WindowType.WindowStaysOnTopHint)
         splash.show()
