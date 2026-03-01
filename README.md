@@ -30,52 +30,65 @@
 ### Integrated Development Environment
 - Syntax highlighting for 8085 assembly language
 - Line numbers and breakpoint management
-- File operations (Open, Save, Save As)
+- File operations (New, Open, Save, Save As)
 - Modern UI with light theme
+- Zoom support (Ctrl+=, Ctrl+-, Ctrl+0)
 
 ### Powerful Assembler
-- Partial 8085 instruction set support
+- Full 8085 instruction set support (all 74 mnemonics)
 - Symbol and label resolution
-- `EQU` directive with arithmetic expression support
+- `EQU` directive with arithmetic expression support (supports `+`, `-`, `*`, `/`, `&`, `|`, `^`, `<<`, `>>`)
 - Comprehensive error reporting
 - Support for `DS` directive for reserving memory bytes
+- `ORG` directive for code placement in 64KB address space
 
 ### Execution and Debugging
 - Step-by-step execution
 - Continuous execution with breakpoints
+- Fast execution mode (without line highlighting)
 - Real-time register and flag visualization
 - Memory viewer and editor
+- Stack display panel for real-time stack monitoring
+- Execution statistics tracking (instruction count, elapsed time)
 
 ### Advanced Tools
 - Number format converter (Hex, Decimal, Binary, ASCII)
 - Memory editor for direct manipulation
-- Execution statistics tracking
+- Follow PC mode for automatic memory view tracking
 - Detailed execution log
 
 ---
 
 ## Installation
 
-### Prerequisites
+### Option 1: Download the Installer (Recommended)
+
+1. Go to the [Releases](https://github.com/rusty-jar/Neo8085/releases) page.
+2. Download the latest installer (`.exe`) from the most recent release.
+3. Run the installer and follow the on-screen instructions.
+4. Launch **Neo8085** from the Start Menu or desktop shortcut.
+
+### Option 2: Run from Source
+
+#### Prerequisites
 - Python 3.13+
 - PySide6 (Qt for Python)
 
-### Installing from Source
+#### Steps
 
 1. **Clone the repository**:
-   ```
+   ```bash
    git clone https://github.com/rusty-jar/Neo8085.git
    cd Neo8085
    ```
 
-
 2. **Install dependencies**:
-   ```
+   ```bash
    pip install -r requirements.txt
    ```
 
 3. **Run the application**:
-   ```
+   ```bash
    python src/main.py
    ```
 
@@ -102,7 +115,7 @@ Use the built-in editor with syntax highlighting, line numbers, and breakpoint s
 
 ## Documentation
 
-### Supported Instructions
+### Supported Instructions (All 74 Mnemonics)
 
 **Data Transfer**: 
 - Register operations: `MOV`, `MVI`
@@ -110,7 +123,7 @@ Use the built-in editor with syntax highlighting, line numbers, and breakpoint s
 - Register pair operations: `LXI`, `XCHG`, `XTHL`, `SPHL`, `PCHL`
 
 **Arithmetic**:
-- Basic operations: `ADD`, `ADI`, `SUB`, `INR`, `DCR`
+- Basic operations: `ADD`, `ADI`, `SUB`, `SUI`, `INR`, `DCR`
 - With carry: `ADC`, `ACI`, `SBB`, `SBI`
 - Register pair operations: `INX`, `DCX`, `DAD`
 - BCD operations: `DAA`
@@ -131,12 +144,11 @@ Use the built-in editor with syntax highlighting, line numbers, and breakpoint s
 **Stack Operations**:
 - `PUSH`, `POP`
 
-**Machine Control**:
-- `HLT`, `NOP`
+**I/O Operations**:
+- `IN`, `OUT`
 
-**Not Implemented**:
-- I/O operations: `IN`, `OUT`
-- Interrupt control: `EI`, `DI`, `RIM`, `SIM`
+**Machine Control**:
+- `HLT`, `NOP`, `EI`, `DI`, `RIM`, `SIM`
 
 ### Assembler Directives
 - `ORG`: Set starting address
@@ -159,6 +171,9 @@ Use the built-in editor with syntax highlighting, line numbers, and breakpoint s
 | F8                  | Stop                      |
 | Ctrl+R              | Reset                     |
 | F9                  | Add Breakpoint            |
+| Ctrl+=              | Zoom In                   |
+| Ctrl+-              | Zoom Out                  |
+| Ctrl+0              | Reset Zoom                |
 
 ---
 
@@ -221,7 +236,6 @@ See the [LICENSE](LICENSE) file for details.
 ---
 
 <p align="center">
-  Made with ❤️ by Shahibur Rahaman <br/>
-  &copy; 2025 Shahibur Rahaman
+  Made with 🧠 & 💻 by Shahibur Rahaman <br/>
+  Copyright &copy; 2026 Shahibur Rahaman
 </p>
-
