@@ -2,7 +2,7 @@
 ;
 ; Built by build.bat, which passes the version and the PyInstaller output:
 ;   ISCC /DAppVersion=2.0.0 /DBuildDir=dist\Neo8085-v2.0.0 installer.iss
-; The result is dist\Neo8085-v<version>-setup.exe.
+; The result is dist\Neo8085-Installer-v<version>.exe.
 ;
 ; Neo8085 bundles 64-bit Python 3.13 and Qt 6.8, which need 64-bit
 ; Windows 10 version 1809 or later (Windows 11 on Arm runs it as x64).
@@ -58,7 +58,7 @@ WizardStyle=modern dynamic
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir=dist
-OutputBaseFilename={#AppName}-v{#AppVersion}-setup
+OutputBaseFilename={#AppName}-Installer-v{#AppVersion}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

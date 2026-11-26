@@ -2,7 +2,7 @@
 rem Builds the Windows version of Neo8085 with PyInstaller.
 rem
 rem Output: dist\Neo8085-v<version>\Neo8085.exe with all of its files in the
-rem same folder, and dist\Neo8085-v<version>-setup.exe (installer.iss) when
+rem same folder, and dist\Neo8085-Installer-v<version>.exe (installer.iss) when
 rem Inno Setup 6 or 7 is installed. The version comes from src\version.py and
 rem is also written into the exe's file properties.
 rem
@@ -68,4 +68,4 @@ if not defined ISCC (
 
 "%ISCC%" /Q "/DAppVersion=%VERSION%" "/DBuildDir=%OUTPUT%" "%ROOT%installer.iss"
 if errorlevel 1 exit /b 1
-echo Done: dist\Neo8085-v%VERSION%-setup.exe
+echo Done: dist\Neo8085-Installer-v%VERSION%.exe
