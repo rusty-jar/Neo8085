@@ -3351,7 +3351,9 @@ END
             f"This program is free software: you can redistribute it and/or modify "
             f"it under the terms of the GNU General Public License as published by "
             f"the Free Software Foundation, either version 3 of the License, or "
-            f"(at your option) any later version.",
+            f"(at your option) any later version.\n\n"
+            f"Intel is a trademark of Intel Corporation. Neo8085 is an independent "
+            f"project and is not affiliated with or endorsed by Intel.",
         )
 
     def soft_reset(self):

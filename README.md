@@ -411,6 +411,8 @@ python -m unittest discover -s tests
 This project is licensed under the **GNU General Public License v3.0**.  
 See the [LICENSE](LICENSE) file for details.
 
+Intel is a trademark of Intel Corporation. Neo8085 is an independent project and is not affiliated with or endorsed by Intel.
+
 ---
 
 ## Acknowledgements
