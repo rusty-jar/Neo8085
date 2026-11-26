@@ -2,8 +2,9 @@
 rem Builds the Windows version of Neo8085 with PyInstaller.
 rem
 rem Output: dist\Neo8085-v<version>\Neo8085.exe with all of its files in the
-rem same folder. The version comes from src\version.py, which is also written
-rem into the exe's file properties.
+rem same folder, and dist\Neo8085-v<version>-setup.exe (installer.iss) when
+rem Inno Setup 6 or 7 is installed. The version comes from src\version.py and
+rem is also written into the exe's file properties.
 rem
 rem Requirements: pip install -r requirements.txt (uses venv\ when it exists).
 
@@ -48,3 +49,23 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo Done: %OUTPUT%\Neo8085.exe
+
+rem Installer, when Inno Setup 6 or 7 is installed
+set "ISCC="
+for %%p in (
+    "%LOCALAPPDATA%\Programs\Inno Setup 7\ISCC.exe"
+    "%ProgramFiles%\Inno Setup 7\ISCC.exe"
+    "%ProgramFiles(x86)%\Inno Setup 7\ISCC.exe"
+    "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+    "%ProgramFiles%\Inno Setup 6\ISCC.exe"
+    "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+) do if not defined ISCC if exist "%%~p" set "ISCC=%%~p"
+if not defined ISCC for /f "delims=" %%p in ('where iscc 2^>nul') do if not defined ISCC set "ISCC=%%p"
+if not defined ISCC (
+    echo Inno Setup not found: skipping the installer.
+    exit /b 0
+)
+
+"%ISCC%" /Q "/DAppVersion=%VERSION%" "/DBuildDir=%OUTPUT%" "%ROOT%installer.iss"
+if errorlevel 1 exit /b 1
+echo Done: dist\Neo8085-v%VERSION%-setup.exe

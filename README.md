@@ -174,6 +174,8 @@ build.bat
 ```
 It builds `dist\Neo8085-v<version>\Neo8085.exe` with PyInstaller, with all of its files in the same folder. The version comes from `src/version.py` and is also written into the exe's file properties.
 
+If [Inno Setup](https://jrsoftware.org/isinfo.php) 6 or 7 is installed, it also builds the installer `dist\Neo8085-v<version>-setup.exe` from `installer.iss`. The installer asks whether to install for the current user (no administrator rights needed) or for all users, adds a Start menu shortcut (and optionally a desktop one), upgrades an earlier version in place and has an uninstaller. Neo8085 needs 64-bit Windows 10 (version 1809) or later.
+
 ### Running the Tests
 
 ```bash
