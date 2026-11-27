@@ -1,13 +1,13 @@
 """Version information for Neo8085."""
 
 # Semantic versioning: MAJOR.MINOR.PATCH
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 # 'alpha', 'beta', 'rc' or 'final'
 __release_status__ = "final"
 
 # YYYYMMDD
-__build_date__ = "20261126"
+__build_date__ = "20261127"
 
 # Distinguishes builds made on the same day
 __build_number__ = 1

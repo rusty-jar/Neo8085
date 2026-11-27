@@ -2110,10 +2110,11 @@ END
         # T-states the CPU clock has produced by now
         elapsed_ns = self.realtime_clock.nsecsElapsed()
         target = self.realtime_start_tstates + (elapsed_ns * clock_hz) // 1_000_000_000
-        # If the host cannot keep up, do not try to catch up more than 50 ms of backlog
+        # If the host cannot keep up, do not try to catch up more than 50 ms of
+        # backlog: the clock's start moves back by the time that is given up
         max_backlog = max(clock_hz // 20, 32)
         if target - cpu.t_states > max_backlog:
-            self.realtime_start_tstates += target - cpu.t_states - max_backlog
+            self.realtime_start_tstates -= target - cpu.t_states - max_backlog
             target = cpu.t_states + max_backlog
 
         start_tstates = cpu.t_states

@@ -127,6 +127,20 @@ for i in range(sim.clock_selector.count()):
     sim.apply_clock_selection()
 sim.clock_selector.set_text("3.072 MHz (trainer kit)"); sim.apply_clock_selection()
 
+# 4b. A host that stalls for longer than the 50 ms backlog limit (a slow PC, a
+# window being dragged) loses that time: the CPU must never run ahead of the
+# wall clock afterwards to make it up
+sim.load_example(next(e for e in EXAMPLES if "LED Chaser" in e.title)); pump()
+sim.start_realtime_execution(); pump(0.2)
+time.sleep(0.5)
+pump(0.1)  # the first tick after the stall
+start_wall, start_t = time.perf_counter(), sim.processor.t_states
+pump(1.0)
+speed = (sim.processor.t_states - start_t) / sim.clock_hz / (time.perf_counter() - start_wall)
+sim.stop_execution(); pump()
+if speed > 1.05:
+    errors.append(f"real time ran at {speed:.0%} after a stall instead of at most 100%")
+
 # 5. Resets, then close the window (saves the layout)
 sim.reset_simulation(); pump()
 sim.close(); pump(0.2)
